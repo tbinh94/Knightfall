@@ -28,37 +28,14 @@ def main_app():
     load_assets()
     
     # ✅ 4. Bắt đầu vòng lặp chính
-    app_state = "MENU"
-    selected_level = None
-    
-    # Tạo instance của manager một lần để giữ lại tiến trình
-    manager = LevelManager(screen)
-
+    print("Bắt đầu chế độ Endless Running...")
     while True:
-        if app_state == "MENU":
-            user_choice = manager.run()  # Chạy menu
-            
-            if user_choice == 'EDITOR':
-                app_state = "EDITOR"  # Chuyển trạng thái sang EDITOR
-            elif user_choice is not None:
-                app_state = "GAME"
-                selected_level = user_choice
-            else:
-                break  # Người dùng thoát khỏi menu
-                
-        elif app_state == "GAME":
-            game = Game(screen, selected_level)
-            game_result = game.run() 
-
-            if game_result == 'COMPLETED' and selected_level != 'ENDLESS_MODE':
-                manager.complete_level(selected_level)
-            
-            app_state = "MENU"  # Luôn quay lại menu
-
-        elif app_state == "EDITOR":
-            editor = LevelEditor(screen)  # Tạo một instance của editor
-            editor.run()                  # Chạy editor
-            app_state = "MENU"            # Sau khi thoát editor, quay lại menu
+        game = Game(screen, "endless_run.json")
+        game_result = game.run() 
+        
+        # Nếu thoát game, thoát ứng dụng
+        if not pygame.get_init() or game_result == 'QUIT':
+            break
 
     print("Exiting application.")
     pygame.quit()

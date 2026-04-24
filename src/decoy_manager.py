@@ -158,6 +158,15 @@ def get_decoy_data(decoy_name):
 
 # --- CONFIG TÙY CHỈNH (OPTIONAL) ---
 DECOY_CONFIGS = {
+    'pillar': {
+        'scale': 0.3,
+        'use_static_frame': True 
+    },
+    'wall': {
+        'scale': 0.4,
+        'use_static_frame': True,
+        'y_offset': 28
+    },
     'treasure_chest': {
         'animation_speed': 300, 
         'scale': 0.9,

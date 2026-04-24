@@ -18,6 +18,9 @@ except ImportError:
 from assets_manager import LOADED_THEMES, load_assets
 from enemy_manager import LOADED_ENEMIES, load_enemies, get_random_enemy, get_enemy_data, get_enemy_config
 from decoy_manager import LOADED_DECOYS, load_decoys, get_random_decoy, get_decoy_data, get_decoy_config
+from battle_system import BattleSystem
+from shop_system import ShopSystem
+from player_stats import PlayerStats, Card
 
 # Thiết lập giá trị mặc định
 if 'PLAYER_TARGET_X' not in globals():
@@ -390,7 +393,8 @@ def collide_player_hitbox(player, obstacle_sprite):
 class ObstacleSprite(pygame.sprite.Sprite):
     def __init__(self, world_x, y, kind='real', sprite_type=None):
         super().__init__()
-        self._layer = 1
+        # Layering: 0 = decor (background), 1 = enemies/allies, 2 = player
+        self._layer = 0 if kind == 'decor' else 1
         self.kind = kind
         self.sprite_type = sprite_type
         self.current_frame = 0
@@ -404,7 +408,7 @@ class ObstacleSprite(pygame.sprite.Sprite):
             if self.kind == 'real':
                 sprite_data = get_enemy_data(self.sprite_type)
                 sprite_config = get_enemy_config(self.sprite_type)
-            elif self.kind == 'fake':
+            elif self.kind in ['fake', 'decor']:
                 sprite_data = get_decoy_data(self.sprite_type)
                 sprite_config = get_decoy_config(self.sprite_type)
                 
@@ -455,30 +459,34 @@ class Player(pygame.sprite.Sprite):
         self.anim_timer = 0.0
         self.animations = {}
         self.wall_state = WallState()
+        self.facing_right = True # For sprite flipping
+        self.double_jump_available = True
+        self.jump_queued = False
         
         for anim_name, anim_cfg in ANIMATION_CONFIG.items():
             self.animations[anim_name] = self.load_spritesheet(
                 anim_cfg['file'], anim_cfg['frames'], anim_cfg['frame_width'],
-                anim_cfg['frame_height'], anim_cfg['scale'], anim_cfg['speed']
+                anim_cfg['frame_height'], anim_cfg['scale'], anim_cfg['speed'],
+                anim_cfg.get('y_offset', 0)
             )
         self.image = self.animations[self.state]['frames'][self.current_frame]
         
-        # ✨ REFACTOR: The hitbox is now the source of truth for position.
         self.hitbox = pygame.Rect(x, 0, PLAYER_W, PLAYER_H)
         self.hitbox.bottom = y
-        
-        # The visual rect is positioned based on the hitbox.
+        self.pos_y = float(self.hitbox.y)
         self.rect = self.image.get_rect(midbottom=self.hitbox.midbottom)
 
-    def load_spritesheet(self, path, num_frames, frame_w, frame_h, scale, anim_speed):
+    def load_spritesheet(self, path, num_frames, frame_w, frame_h, scale, anim_speed, y_offset=0):
         frames = []
         try:
             spritesheet = pygame.image.load(path).convert_alpha()
+            cols = spritesheet.get_width() // frame_w
             for i in range(num_frames):
-                rect = pygame.Rect(i * (spritesheet.get_width() // num_frames), 0, 
-                                 (spritesheet.get_width() // num_frames), frame_h)
+                row = i // cols
+                col = i % cols
+                rect = pygame.Rect(col * frame_w, row * frame_h, frame_w, frame_h)
                 frame = spritesheet.subsurface(rect)
-                new_w = int((spritesheet.get_width() // num_frames) * scale)
+                new_w = int(frame_w * scale)
                 new_h = int(frame_h * scale)
                 frame = pygame.transform.scale(frame, (new_w, new_h))
                 frames.append(frame)
@@ -487,20 +495,26 @@ class Player(pygame.sprite.Sprite):
             placeholder = pygame.Surface((int(frame_w*scale), int(frame_h*scale)), pygame.SRCALPHA)
             placeholder.fill((255, 0, 255, 128))
             frames.append(placeholder)
-        return {'frames': frames, 'speed': anim_speed}
+        return {'frames': frames, 'speed': anim_speed, 'y_offset': y_offset * scale}
 
     def jump(self):
+        """Executes jump or double jump."""
         if self.on_ground:
             self.vy = JUMP_V
             self.on_ground = False
+            self.double_jump_available = True
         elif self.wall_state.is_sliding and self.wall_state.execute_jump():
             wall_side = self.wall_state.side
-            print(f"🚀 WALL CLIMB JUMP from {wall_side} wall!")
-            jump_vy = -abs(JUMP_V)
-            jump_vx = 0
-            self.vy = jump_vy
-            self.vx = jump_vx
+            self.vy = JUMP_V
+            if wall_side == 'right':
+                self.vx = -WALL_PUSH_BACK_SPEED
+            else:
+                self.vx = WALL_PUSH_BACK_SPEED
             self.wall_state.stop_slide()
+            self.double_jump_available = True
+        elif self.double_jump_available:
+            self.vy = DOUBLE_JUMP_V
+            self.double_jump_available = False
 
     def _check_wall_collision(self, test_rect, wall_tiles, world_x_offset):
         """Check collision with wall and return side or None"""
@@ -529,14 +543,38 @@ class Player(pygame.sprite.Sprite):
         old_hitbox = self.hitbox.copy()
         self.wall_state.update(delta_time)
         
-        # ✨ REFACTOR: Horizontal movement is applied to the hitbox.
+        # Manual movement controls
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.vx = -WALK_SPEED
+            self.facing_right = False
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.vx = WALK_SPEED
+            self.facing_right = True
+        else:
+            self.vx *= PLAYER_DRAG_COEFFICIENT
+            if abs(self.vx) < 0.1:
+                self.vx = 0
+                
+        # Horizontal movement is applied to the hitbox.
         self.hitbox.x += self.vx
-        self.vx *= PLAYER_DRAG_COEFFICIENT
-        if abs(self.vx) < 0.1:
-            self.vx = 0
         
-        # Wall collision
-        if wall_tiles:
+        # X-Axis Platform collision (Wall blocking)
+        for p in platforms:
+            # Treat platform as a solid block
+            platform_screen_rect = pygame.Rect(p.x - world_x_offset, p.y, p.length, 600) 
+            if self.hitbox.colliderect(platform_screen_rect):
+                # If player's feet are below the platform's top surface, they hit a wall
+                if self.hitbox.bottom > platform_screen_rect.top + 10:
+                    if self.vx > 0: # Moving right
+                        self.hitbox.right = platform_screen_rect.left
+                        self.vx = 0
+                    elif self.vx < 0: # Moving left
+                        self.hitbox.left = platform_screen_rect.right
+                        self.vx = 0
+
+        # Wall collision (Special wall tiles, only if NOT in re-attach cooldown)
+        if wall_tiles and self.wall_state.re_attach_cooldown <= 0:
             side, wall_rect, overlap = self._check_wall_collision(self.hitbox, wall_tiles, world_x_offset)
             
             if side:
@@ -553,23 +591,31 @@ class Player(pygame.sprite.Sprite):
             else:
                 self.wall_state.stop_slide()
         
-        # ✨ REFACTOR: Vertical movement is applied to the hitbox.
-        self.vy += GRAVITY
+        # Vertical movement using float for stability
+        if not self.on_ground:
+            self.vy += GRAVITY
+            
         if self.wall_state.is_sliding and not self.on_ground:
             self.vy = min(self.vy, MAX_WALL_SLIDE_SPEED)
-        self.hitbox.y += self.vy
         
-        # Platform collision
+        # Update float position and sync to hitbox
+        self.pos_y += self.vy
+        self.hitbox.y = int(self.pos_y)
+        
+        # Y-Axis Platform collision (Ground landing)
         self.on_ground = False
         for p in platforms:
-            platform_screen_rect = pygame.Rect(p.x - world_x_offset, p.y, p.length, 20)
+            # 1px buffer to prevent horizontal jitter at seams
+            top_rect = pygame.Rect(p.x - world_x_offset - 1, p.y, p.length + 2, 20)
+            ground_check_rect = pygame.Rect(self.hitbox.x, self.hitbox.y, self.hitbox.width, self.hitbox.height + 2)
             
-            if self.hitbox.colliderect(platform_screen_rect) and self.vy >= 0:
-                if old_hitbox.bottom <= platform_screen_rect.top:
+            if ground_check_rect.colliderect(top_rect) and self.vy >= 0:
+                if old_hitbox.bottom <= top_rect.top + 15:
                     self.on_ground = True
+                    self.double_jump_available = True
                     self.vy = 0
-                    # 🔥 FIX: Snap hitbox bottom to platform top
-                    self.hitbox.bottom = platform_screen_rect.top
+                    self.hitbox.bottom = top_rect.top
+                    self.pos_y = float(self.hitbox.y) # Sync float to snapped position
                     self.wall_state.reset()
                     break
         
@@ -578,37 +624,49 @@ class Player(pygame.sprite.Sprite):
             if self.wall_state.time_elapsed > WALL_CLIMB_TIME_LIMIT:
                 return "WALL_TIME_EXCEEDED"
         
-        # Update animation state
+        # Animation state selection
         previous_state = self.state
-        if self.wall_state.is_sliding and not self.on_ground:
-            self.state = 'wall_slide'
+        if self.state == 'death':
+            pass # Keep death state
+        elif self.wall_state.is_sliding and not self.on_ground:
+            self.state = 'climb'
         elif not self.on_ground:
             self.state = 'jump' if self.vy < 0 else 'fall'
-        else:
+        elif abs(self.vx) > 0.1:
             self.state = 'run'
+        else:
+            self.state = 'idle'
         
         if self.state != previous_state:
             self.current_frame = 0
         
         # Update animation frame
-        anim_to_play = 'jump' if self.state == 'wall_slide' else self.state
+        anim_to_play = self.state
         current_anim = self.animations[anim_to_play]
         self.anim_timer += delta_time * 1000
         
         if self.anim_timer > current_anim['speed']:
             self.anim_timer %= current_anim['speed']
-            if anim_to_play == 'jump' and self.current_frame < len(current_anim['frames']) - 1:
+            if anim_to_play in ['jump', 'death'] and self.current_frame < len(current_anim['frames']) - 1:
                 self.current_frame += 1
-            else:
+            elif anim_to_play not in ['jump', 'death']:
                 self.current_frame = (self.current_frame + 1) % len(current_anim['frames'])
         
         self.image = current_anim['frames'][self.current_frame]
         
-        if self.wall_state.side == 'right':
+        # Flip logic for left/right
+        if not self.facing_right:
             self.image = pygame.transform.flip(self.image, True, False)
         
-        # ✨ REFACTOR: Sync the visual rect to the final hitbox position.
+        # Only flip for wall side if we are actually in climb state
+        if self.state == 'climb' and self.wall_state.side == 'right':
+            self.image = pygame.transform.flip(self.image, True, False)
+        
+        # Final visual rect positioning
+        self.rect = self.image.get_rect()
         self.rect.midbottom = self.hitbox.midbottom
+        # Adjust vertical offset from animation config
+        self.rect.y += int(current_anim.get('y_offset', 0))
         
         return None
 
@@ -667,6 +725,7 @@ class PlayingState(GameState):
         self.visible_platforms = [] 
         self.visible_walls = []
         self.visible_wall_tiles = []
+        self.platform_surfaces = {} # Cache for pre-rendered platforms
 
     def enter_state(self):
         self.all_sprites.empty()
@@ -674,7 +733,6 @@ class PlayingState(GameState):
         self.fake_obstacles.empty()
         
         # Set player's initial state
-        # ✨ REFACTOR: Set hitbox position directly
         self.player.hitbox.x = PLAYER_TARGET_X
         self.player.hitbox.bottom = GROUND_Y # Initial guess, corrected below
         self.player.vy = 0
@@ -684,10 +742,16 @@ class PlayingState(GameState):
         self.player.current_frame = 0
         self.player.anim_timer = 0.0
         self.player.wall_state.reset()
+        self.player.jump_queued = False # Ensure jump buffer is clear on restart
         self.all_sprites.add(self.player)
+        
+        # Reset health for new run/respawn
+        if self.game.player_stats.hp <= 0:
+            self.game.player_stats.hp = self.game.player_stats.max_hp
         
         self.world_x_offset = 0
         self.current_run_speed = RUN_SPEED
+        self.platform_surfaces.clear() # Clear cache on restart/new level
 
         if self.is_endless:
             self.active_segments.clear()
@@ -698,14 +762,23 @@ class PlayingState(GameState):
             if self.endless_manager and self.endless_manager.patterns:
                 first_plat_y = self.endless_manager.patterns[0].get("platform_y", GROUND_Y)
 
+            # Set player correctly on the first platform
+            self.player.hitbox.bottom = first_plat_y
+            self.player.pos_y = float(self.player.hitbox.y)
+            print(f"✓ Player placed on starting platform at y={first_plat_y}")
+
             print(f"💡 Creating a {SAFE_ZONE_DISTANCE}px safe zone for endless mode.")
             safe_zone_config = {"type": "straight", "platform_y": first_plat_y, 
                               "length": SAFE_ZONE_DISTANCE, "obstacles": []}
             safe_segment = TerrainGenerator.straight(self.cursor_x, safe_zone_config)
             self.active_segments.append(safe_segment)
+            self.cursor_x += SAFE_ZONE_DISTANCE
+            
             while self.cursor_x < self.world_x_offset + SCREEN_W * 1.5:
                 self._spawn_next_segment()
         else:
+            self.player.hitbox.bottom = GROUND_Y
+            self.player.pos_y = float(self.player.hitbox.y)
             self._create_fixed_level()
             
         # CRITICAL: Find the correct starting platform and place the player on it.
@@ -766,13 +839,14 @@ class PlayingState(GameState):
         sprite_type = None
         if ob_data.kind == 'real' and LOADED_ENEMIES: 
             sprite_type = get_random_enemy()
-        elif ob_data.kind == 'fake' and LOADED_DECOYS: 
+        elif ob_data.kind in ['fake', 'decor'] and LOADED_DECOYS: 
             sprite_type = get_random_decoy()
         obstacle_sprite = ObstacleSprite(ob_data.x, ob_data.y, ob_data.kind, sprite_type=sprite_type)
         if ob_data.kind == 'real': 
             self.real_obstacles.add(obstacle_sprite)
-        else: 
+        elif ob_data.kind == 'fake': 
             self.fake_obstacles.add(obstacle_sprite)
+        # Decorative objects don't go into interaction groups
         self.all_sprites.add(obstacle_sprite)
         
     def handle_events(self, events):
@@ -786,13 +860,15 @@ class PlayingState(GameState):
                     self.game.running = False
 
     def update(self, delta_time):
-        if self.is_endless:
-            if self.current_run_speed < MAX_RUN_SPEED:
-                self.current_run_speed += SPEED_INCREASE_RATE * delta_time
-            self.current_run_speed = min(self.current_run_speed, MAX_RUN_SPEED)
-
-        base_scroll = self.current_run_speed * delta_time * 60
-        self.world_x_offset += base_scroll
+        if self.player.state == 'death':
+            death_anim = self.player.animations['death']
+            if self.player.current_frame >= len(death_anim['frames']) - 1:
+                pygame.time.delay(500) # Wait a bit
+                self.game.flip_state("game_over")
+            return
+            
+        # Auto-scrolling is disabled for RPG mode
+        self.current_run_speed = 0
         
         self.visible_platforms.clear()
         self.visible_walls.clear()
@@ -809,6 +885,13 @@ class PlayingState(GameState):
                 if p is None: 
                     continue
                 
+                # Sync physics length to visual tile multiples to prevent invisible ledges or fake floors
+                if self.active_theme_tiles and self.active_theme_tiles.get('wall_top_middle'):
+                    tile_size = self.active_theme_tiles.get('wall_top_middle').get_width()
+                    if tile_size > 0:
+                        num_tiles_x = max(1, round(p.length / tile_size))
+                        p.length = num_tiles_x * tile_size
+
                 x_on_screen = p.x - self.world_x_offset
                 if x_on_screen + p.length < -200 or x_on_screen > SCREEN_W + 200:
                     continue
@@ -828,7 +911,13 @@ class PlayingState(GameState):
         diff = current_screen_x - PLAYER_TARGET_X
         self.world_x_offset += diff
         self.player.hitbox.x = PLAYER_TARGET_X
-        self.player.rect.midbottom = self.player.hitbox.midbottom # re-sync after camera adjust
+        # Do NOT re-sync rect.midbottom here, it's already handled in player.update
+        # which now accounts for offsets and camera-synced hitbox.
+        # But since we just forced hitbox.x to PLAYER_TARGET_X, we should sync ONE last time
+        self.player.rect.midbottom = self.player.hitbox.midbottom
+        # Re-apply y_offset after final sync
+        current_anim = self.player.animations[self.player.state]
+        self.player.rect.y += int(current_anim.get('y_offset', 0))
 
         if wall_check == "WALL_TIME_EXCEEDED":
             print("Game Over: Wall time exceeded!")
@@ -839,11 +928,40 @@ class PlayingState(GameState):
             if sprite != self.player:
                 sprite.update(self.world_x_offset, delta_time)
         
-        collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, 
-                                                 False, collided=collide_player_hitbox)
-        if collisions:
-            print("Player collided with an obstacle! Game Over.")
-            self.game.flip_state("game_over")
+        real_collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, False, collided=collide_player_hitbox)
+        if real_collisions:
+            obs = real_collisions[0]
+            print("Player hit enemy! Entering Battle.")
+            battle = BattleSystem(self.game.screen, "Monster", self.game.player_stats)
+            res_tuple = battle.run()
+            res = res_tuple[0] if isinstance(res_tuple, tuple) else res_tuple
+            reward = res_tuple[1] if isinstance(res_tuple, tuple) else None
+            
+            if res == 'WIN':
+                obs.kill()
+                if reward:
+                    if reward['type'] == 'hp': self.game.player_stats.add_max_hp(reward['val'])
+                    elif reward['type'] == 'atk': self.game.player_stats.atk_bonus += reward['val']
+                    elif reward['type'] == 'card': self.game.player_stats.add_card(reward['val'])
+                    print(f"Applied reward: {reward['name']}")
+            elif res == 'LOSE':
+                self.player.state = 'death'
+                self.player.current_frame = 0
+            elif res == 'QUIT':
+                self.game.flip_state("game_over")
+            return
+
+        fake_collisions = pygame.sprite.spritecollide(self.player, self.fake_obstacles, False, collided=collide_player_hitbox)
+        if fake_collisions:
+            obs = fake_collisions[0]
+            print("Player hit ally! Entering Shop.")
+            shop = ShopSystem(self.game.screen)
+            res = shop.run()
+            if res == 'HEALED':
+                self.game.player_stats.add_hp(20)
+            obs.kill()
+            if res == 'QUIT':
+                self.game.running = False
             return
 
         if self.player.hitbox.top > SCREEN_H:
@@ -897,37 +1015,49 @@ class PlayingState(GameState):
         if tile_size == 0: 
             return
 
-        # Draw platforms
+        # Draw platforms (OPTIMIZED with Pre-rendering)
         for p in self.visible_platforms:
             x_on_screen = p.x - self.world_x_offset
-            num_tiles_x = max(1, round(p.length / tile_size))
-            start_row = max(0, int(-p.y / tile_size))
-            end_row = start_row + math.ceil(SCREEN_H / tile_size) + 1
             
-            for j in range(start_row, end_row):
-                current_y = p.y + j * tile_size
-                if current_y > SCREEN_H: 
-                    break
+            # Check if we have this platform pre-rendered
+            plat_key = (p.length, p.y)
+            if plat_key not in self.platform_surfaces:
+                # Create a new surface for this platform
+                tile_size = tile_top_middle.get_width()
+                num_tiles_x = max(1, round(p.length / tile_size))
+                height_needed = SCREEN_H - p.y
+                num_tiles_y = math.ceil(height_needed / tile_size) + 1
                 
-                if j == 0:
-                    for i in range(num_tiles_x):
-                        tile_to_draw = tile_top_middle
-                        if num_tiles_x > 1:
-                            if i == 0: 
-                                tile_to_draw = tile_top_left
-                            elif i == num_tiles_x - 1: 
-                                tile_to_draw = tile_top_right
-                        if tile_to_draw:
-                            screen.blit(tile_to_draw, (x_on_screen + i * tile_size, p.y))
-                else:
+                # Create surface exactly matching physics length to avoid fake edges
+                actual_w = num_tiles_x * tile_size
+                plat_surf = pygame.Surface((actual_w, num_tiles_y * tile_size), pygame.SRCALPHA)
+                
+                # Draw the top row
+                for i in range(num_tiles_x):
+                    tile = tile_top_middle
                     if num_tiles_x > 1:
-                        screen.blit(tile_middle_left, (x_on_screen, current_y))
+                        if i == 0: tile = tile_top_left
+                        elif i == num_tiles_x - 1: tile = tile_top_right
+                    if tile: plat_surf.blit(tile, (i * tile_size, 0))
+                
+                # Draw the fill
+                for j in range(1, num_tiles_y):
+                    if num_tiles_x > 1:
+                        plat_surf.blit(tile_middle_left, (0, j * tile_size))
                         if tile_fill:
                             for i in range(1, num_tiles_x - 1):
-                                screen.blit(tile_fill, (x_on_screen + i * tile_size, current_y))
-                        screen.blit(tile_middle_right, (x_on_screen + (num_tiles_x - 1) * tile_size, current_y))
+                                plat_surf.blit(tile_fill, (i * tile_size, j * tile_size))
+                        plat_surf.blit(tile_middle_right, ((num_tiles_x - 1) * tile_size, j * tile_size))
                     else:
-                        screen.blit(tile_middle_left, (x_on_screen, current_y))
+                        plat_surf.blit(tile_middle_left, (0, j * tile_size))
+                
+                # Crop to exact physics length
+                final_surf = pygame.Surface((p.length, num_tiles_y * tile_size), pygame.SRCALPHA)
+                final_surf.blit(plat_surf, (0, 0))
+                self.platform_surfaces[plat_key] = final_surf
+            
+            # Blit the pre-rendered platform
+            screen.blit(self.platform_surfaces[plat_key], (x_on_screen, p.y))
 
         # Draw wall tiles
         for wall_tile in self.visible_wall_tiles:
@@ -958,6 +1088,9 @@ class PlayingState(GameState):
                 pygame.draw.rect(screen, (100, 100, 80), wall_rect)
 
         self.all_sprites.draw(screen)
+        
+        # DRAW OVERWORLD HUD
+        self.game.player_stats.draw_hud(screen, self.game.font)
 
         # Draw wall climb timer
         if self.player.wall_state.is_sliding:
@@ -1026,6 +1159,11 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         self.game_status = 'QUIT'
+        self.font = pygame.font.SysFont(None, 32)
+        
+        # PERSISTENT PLAYER STATS
+        self.player_stats = PlayerStats()
+        
         self.states = {
             "playing": PlayingState(self, level_file), 
             "game_over": GameOverState(self)
@@ -1044,14 +1182,15 @@ class Game:
         last_time = pygame.time.get_ticks()
         while self.running:
             current_time = pygame.time.get_ticks()
-            delta_time = (current_time - last_time) / 1000.0
-            last_time = current_time
+            # 🔥 FIX: Use clock.tick to get delta_time for more stable physics
+            delta_time = self.clock.tick(FPS) / 1000.0
+            
             events = pygame.event.get()
             self.current_state.handle_events(events)
             self.current_state.update(delta_time)
             self.current_state.draw(self.screen)
             pygame.display.flip()
-            self.clock.tick(FPS)
+            
         return self.game_status
 
 if __name__ == "__main__":

@@ -223,6 +223,13 @@ ENEMY_CONFIGS = {
     'worm': {
         'animation_speed': 100,
         'scale': 0.6
+    },
+    'dark_gargoyle': {
+        'scale': 2.0,
+        'y_offset': 10
+    },
+    'spiked_barricade': {
+        'scale': 1.8
     }
 }
 

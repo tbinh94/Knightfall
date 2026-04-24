@@ -35,17 +35,19 @@ SCALE_UNIFORM = min(SCALE_X, SCALE_Y)  # Giữ tỷ lệ đồng nhất
 # GROUND POSITION (Sát đáy màn hình)
 # ============================================
 # Thay vì cố định ở giữa, giờ sẽ tính từ đáy lên
-GROUND_MARGIN_FROM_BOTTOM = 150  # Khoảng cách từ đáy màn hình
+GROUND_MARGIN_FROM_BOTTOM = 100  # Giảm xuống để ground thấp hơn
 GROUND_Y = SCREEN_H - GROUND_MARGIN_FROM_BOTTOM
 
 # ============================================
 # PLAYER SETTINGS (Scaled)
 # ============================================
-PLAYER_W = int(22 * SCALE_UNIFORM)
-PLAYER_H = int(36 * SCALE_UNIFORM)
+PLAYER_W = int(33 * SCALE_UNIFORM)
+PLAYER_H = int(54 * SCALE_UNIFORM)
 JUMP_V = -13 * SCALE_UNIFORM
-GRAVITY = 0.5 * SCALE_UNIFORM
+DOUBLE_JUMP_V = -11 * SCALE_UNIFORM
+GRAVITY = 0.45 * SCALE_UNIFORM
 RUN_SPEED = 3.5 * SCALE_UNIFORM
+WALK_SPEED = 5.0 * SCALE_UNIFORM  # Manual movement speed
 
 # ============================================
 # ENDLESS MODE (Scaled)
@@ -59,9 +61,9 @@ SAFE_ZONE_DISTANCE = int(200 * SCALE_X)
 # ============================================
 WALL_CLIMB_TIME_LIMIT = 3.0
 WALL_CLIMB_WARNING_TIME = 1.5
-WALL_PUSH_BACK_SPEED = 150 * SCALE_UNIFORM
+WALL_PUSH_BACK_SPEED = 6.0 * SCALE_UNIFORM
 CONSECUTIVE_WALL_JUMP_COOLDOWN = 0.1
-PLAYER_DRAG_COEFFICIENT = 0.85
+PLAYER_DRAG_COEFFICIENT = 0.5
 MAX_WALL_SLIDE_SPEED = 2.5 * SCALE_UNIFORM
 WALL_COUNTER_SCROLL_SPEED = RUN_SPEED
 
@@ -117,29 +119,104 @@ PARALLAX_BACKGROUND_CONFIG = [
 # ANIMATION CONFIG (Scaled)
 # ============================================
 ANIMATION_CONFIG = {
+    'idle': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
+    },
     'run': {
-        'file': 'assets/player/_Run.png',
-        'frames': 10,
-        'frame_width': 120,
-        'frame_height': 80,
-        'scale': 0.7 * SCALE_UNIFORM,
-        'speed': 75
+        'file': 'assets/player/Run.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 70,
+        'y_offset': 0
     },
     'jump': {
-        'file': 'assets/player/_Jump.png',
-        'frames': 3,
-        'frame_width': 120,
-        'frame_height': 80,
-        'scale': 0.7 * SCALE_UNIFORM,
-        'speed': 100
+        'file': 'assets/player/Jump.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
     },
     'fall': {
-        'file': 'assets/player/_JumpFallInbetween.png',
-        'frames': 2,
-        'frame_width': 120,
-        'frame_height': 80,
-        'scale': 0.7 * SCALE_UNIFORM,
-        'speed': 120
+        'file': 'assets/player/Jump.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
+    },
+    'climb': {
+        'file': 'assets/player/Climb.png',
+        'frames': 6,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
+    },
+    'death': {
+        'file': 'assets/player/Death.png',
+        'frames': 4,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 120,
+        'y_offset': 0
+    },
+    'attack1': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
+    },
+    'attack2': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
+    },
+    'attack3': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
+    },
+    'defend': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
+    },
+    'hurt': {
+        'file': 'assets/player/Idle.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
     }
 }
 
