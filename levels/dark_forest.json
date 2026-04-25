@@ -1,0 +1,69 @@
+{
+  "theme": "dark_forest",
+  "mode": "fixed",
+  "metadata": {
+    "display_name": "Level 1: The Withered Forest",
+    "description": "The kingdom has fallen. The forest is now a graveyard of souls.",
+    "difficulty": "Easy/Medium",
+    "target_distance": 3000
+  },
+  "sections": [
+    {
+      "comment": "Phase 1: Tutorial (0 - 500m)",
+      "type": "straight",
+      "length": 500,
+      "platform_y": 600,
+      "obstacles": [
+        { "x": 100, "kind": "decor", "type": "lore_popup", "text": "Move: A/D | Jump: Space | Attack: J" },
+        { "x": 300, "kind": "real", "type": "rotten_bug" },
+        { "x": 450, "kind": "real", "type": "rotten_bug" }
+      ]
+    },
+    {
+      "comment": "Phase 2: Exploration (500 - 1500m)",
+      "type": "gap",
+      "length": 1000,
+      "base_y": 600,
+      "platforms": [
+        { "x": 0, "width": 300, "y_offset": 0 },
+        { "x": 350, "width": 200, "y_offset": -80 },
+        { "x": 600, "width": 300, "y_offset": 0 },
+        { "x": 950, "width": 50, "y_offset": -150 }
+      ],
+      "obstacles": [
+        { "platform_index": 0, "x": 150, "kind": "real", "type": "forest_ghoul" },
+        { "platform_index": 1, "x": 50, "kind": "real", "type": "spike" },
+        { "platform_index": 2, "x": 100, "kind": "decor", "type": "dead_knight", "text": "They came from beneath..." },
+        { "platform_index": 2, "x": 200, "kind": "real", "type": "flying_parasite" }
+      ]
+    },
+    {
+      "comment": "Phase 3: Danger (1500 - 2500m)",
+      "type": "gap",
+      "length": 1000,
+      "base_y": 600,
+      "platforms": [
+        { "x": 0, "width": 200, "y_offset": 0 },
+        { "x": 300, "width": 150, "y_offset": -100 },
+        { "x": 550, "width": 150, "y_offset": -200 },
+        { "x": 800, "width": 200, "y_offset": 0 }
+      ],
+      "obstacles": [
+        { "platform_index": 0, "x": 100, "kind": "real", "type": "corrupted_guard" },
+        { "platform_index": 1, "x": 50, "kind": "real", "type": "moving_platform" },
+        { "platform_index": 2, "x": 75, "kind": "real", "type": "corrupted_guard" },
+        { "x": 900, "kind": "decor", "type": "low_visibility_trigger" }
+      ]
+    },
+    {
+      "comment": "Phase 4: Mini Boss (2500 - 3000m)",
+      "type": "straight",
+      "length": 500,
+      "platform_y": 600,
+      "obstacles": [
+        { "x": 100, "kind": "decor", "type": "boss_trigger" },
+        { "x": 250, "kind": "real", "type": "rooted_knight_boss" }
+      ]
+    }
+  ]
+}

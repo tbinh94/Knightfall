@@ -17,20 +17,20 @@ def main_app():
     Hàm điều phối chính của ứng dụng.
     Khởi tạo Pygame MỘT LẦN, sau đó load assets, rồi chạy các trạng thái.
     """
-    # ✅ 1. Khởi tạo pygame TRƯỚC
+    # 1. Khởi tạo pygame TRƯỚC
     pygame.init()
-    print("✓ Pygame initialized in game.py")
+    print("[OK] Pygame initialized in game.py")
     
-    # ✅ 2. Tạo screen
+    # 2. Tạo screen
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
     
-    # ✅ 3. SAU ĐÓ MỚI load assets (vì pygame đã init)
+    # 3. SAU ĐÓ MỚI load assets (vì pygame đã init)
     load_assets()
     
-    # ✅ 4. Bắt đầu vòng lặp chính
-    print("Bắt đầu chế độ Endless Running...")
+    # 4. Bắt đầu vòng lặp chính
+    print("Bat dau che do Endless Running...")
     while True:
-        game = Game(screen, "endless_run.json")
+        game = Game(screen, DEFAULT_LEVEL)
         game_result = game.run() 
         
         # Nếu thoát game, thoát ứng dụng

@@ -34,8 +34,7 @@ SCALE_UNIFORM = min(SCALE_X, SCALE_Y)  # Giữ tỷ lệ đồng nhất
 # ============================================
 # GROUND POSITION (Sát đáy màn hình)
 # ============================================
-# Thay vì cố định ở giữa, giờ sẽ tính từ đáy lên
-GROUND_MARGIN_FROM_BOTTOM = 100  # Giảm xuống để ground thấp hơn
+GROUND_MARGIN_FROM_BOTTOM = 20  # Tạo một dải đất mỏng 20px ở đáy màn hình
 GROUND_Y = SCREEN_H - GROUND_MARGIN_FROM_BOTTOM
 
 # ============================================
@@ -54,7 +53,7 @@ WALK_SPEED = 5.0 * SCALE_UNIFORM  # Manual movement speed
 # ============================================
 SPEED_INCREASE_RATE = 0.2 * SCALE_UNIFORM
 MAX_RUN_SPEED = 15 * SCALE_UNIFORM
-SAFE_ZONE_DISTANCE = int(200 * SCALE_X)
+SAFE_ZONE_DISTANCE = int(1200 * SCALE_X)
 
 # ============================================
 # WALL JUMP PHYSICS (Scaled)
@@ -68,6 +67,18 @@ MAX_WALL_SLIDE_SPEED = 2.5 * SCALE_UNIFORM
 WALL_COUNTER_SCROLL_SPEED = RUN_SPEED
 
 # ============================================
+# STOMP ATTACK SETTINGS (Scaled)
+# ============================================
+STOMP_WINDUP_TIME = 150 # ms
+STOMP_DIVE_SPEED = 15.0 * SCALE_UNIFORM
+STOMP_GRAVITY_MULT = 1.5
+STOMP_WINDUP_GRAVITY_MULT = 0.5
+STOMP_RECOVERY_TIME = 200 # ms
+STOMP_COOLDOWN = 300 # ms
+STOMP_BOUNCE_V = -8.0 * SCALE_UNIFORM
+
+
+# ============================================
 # CAMERA SETTINGS (Scaled)
 # ============================================
 PLAYER_TARGET_X = int(300 * SCALE_X)
@@ -78,7 +89,7 @@ CAMERA_CATCH_UP_SPEED_MULTIPLIER = 1.0
 # ============================================
 MAX_STEPS_PER_GENOME = 2000
 DEFAULT_GENERATIONS = 40
-DEFAULT_LEVEL = "level_tutorial.json"
+DEFAULT_LEVEL = "dark_forest.json"
 
 # ============================================
 # TILESET SETTINGS (Scaled)
@@ -95,25 +106,18 @@ TILE_PRESETS = {
     'stone_platform': [(3, 7), (4, 7), (5, 7)],
 }
 
-ACTIVE_TILE_PRESET = 'bottom_platform'
+ACTIVE_TILE_PRESET = 'dark_ground'
 
 # ============================================
 # BACKGROUND PARALLAX (Responsive)
 # ============================================
 PARALLAX_BACKGROUND_CONFIG = [
     {
-        "file": "assets/backgrounds/background_layer_1.png",
-        "speed": 0.2
-    },
-    {
-        "file": "assets/backgrounds/background_layer_2.png",
-        "speed": 0.5
-    },
-    {
-        "file": "assets/backgrounds/background_layer_3.png",
-        "speed": 0.8
+        "file": "assets/backgrounds/dungeon_bg.png",
+        "speed": 1.0
     }
 ]
+
 
 # ============================================
 # ANIMATION CONFIG (Scaled)
@@ -174,30 +178,30 @@ ANIMATION_CONFIG = {
         'y_offset': 0
     },
     'attack1': {
-        'file': 'assets/player/Idle.png',
+        'file': 'assets/player/Attacks.png',
         'frames': 8,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 80,
+        'speed': 60,
         'y_offset': 0
     },
     'attack2': {
-        'file': 'assets/player/Idle.png',
+        'file': 'assets/player/Attacks.png',
         'frames': 8,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 80,
+        'speed': 60,
         'y_offset': 0
     },
     'attack3': {
-        'file': 'assets/player/Idle.png',
+        'file': 'assets/player/Attacks.png',
         'frames': 8,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 80,
+        'speed': 60,
         'y_offset': 0
     },
     'defend': {
@@ -210,15 +214,70 @@ ANIMATION_CONFIG = {
         'y_offset': 0
     },
     'hurt': {
-        'file': 'assets/player/Idle.png',
+        'file': 'assets/player/Hurt.png',
+        'frames': 4,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
+    },
+    'hanging': {
+        'file': 'assets/player/Hanging.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 120,
+        'y_offset': 25 # Reduced from 85 to align hands with the ledge correctly
+    },
+    'crouch': {
+        'file': 'assets/player/crouch_idle.png',
         'frames': 8,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
         'speed': 100,
         'y_offset': 0
+    },
+    'attack_from_air': {
+        'file': 'assets/player/attack_from_air.png',
+        'frames': 7,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 70,
+        'y_offset': 0
+    },
+    'jump_attack_start': {
+        'file': 'assets/player/attack_from_air.png',
+        'frames': 3,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 50,
+        'y_offset': 0
+    },
+    'stomp_down': {
+        'file': 'assets/player/attack_from_air.png',
+        'frames': 3,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 50,
+        'y_offset': 0
+    },
+    'land_heavy': {
+        'file': 'assets/player/crouch_idle.png',
+        'frames': 1,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 200,
+        'y_offset': 0
     }
 }
+
 
 # ============================================
 # HELPER FUNCTIONS
@@ -241,7 +300,7 @@ def scale_value(value):
 def print_resolution_info():
     """In thông tin resolution để debug"""
     print("\n" + "="*50)
-    print("🖥️  RESPONSIVE CONFIGURATION")
+    print("[RESPONSIVE CONFIGURATION]")
     print("="*50)
     print(f"Base Resolution: {BASE_WIDTH}x{BASE_HEIGHT}")
     print(f"Current Resolution: {SCREEN_W}x{SCREEN_H}")
