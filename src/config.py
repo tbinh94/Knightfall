@@ -22,7 +22,7 @@ def get_screen_resolution():
 # Có thể override bằng cách set trực tiếp
 SCREEN_W = 1280
 SCREEN_H = 720
-FPS = 60
+FPS = 40
 
 # ============================================
 # SCALE FACTORS (Tự động tính)
@@ -77,6 +77,14 @@ STOMP_RECOVERY_TIME = 200 # ms
 STOMP_COOLDOWN = 300 # ms
 STOMP_BOUNCE_V = -8.0 * SCALE_UNIFORM
 
+
+# ============================================
+# ROLL SETTINGS (Scaled)
+# ============================================
+ROLL_SPEED = 8.0 * SCALE_UNIFORM
+ROLL_DURATION = 400 # ms
+ROLL_COOLDOWN = 600 # ms
+ROLL_INVINCIBILITY_DURATION = 350 # ms
 
 # ============================================
 # CAMERA SETTINGS (Scaled)
@@ -183,8 +191,9 @@ ANIMATION_CONFIG = {
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 60,
-        'y_offset': 0
+        'speed': 50,
+        'y_offset': 0,
+        'start_frame': 0
     },
     'attack2': {
         'file': 'assets/player/Attacks.png',
@@ -192,8 +201,9 @@ ANIMATION_CONFIG = {
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 60,
-        'y_offset': 0
+        'speed': 50,
+        'y_offset': 0,
+        'start_frame': 8
     },
     'attack3': {
         'file': 'assets/player/Attacks.png',
@@ -201,8 +211,9 @@ ANIMATION_CONFIG = {
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 60,
-        'y_offset': 0
+        'speed': 50,
+        'y_offset': 0,
+        'start_frame': 16
     },
     'defend': {
         'file': 'assets/player/Idle.png',
@@ -274,6 +285,24 @@ ANIMATION_CONFIG = {
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
         'speed': 200,
+        'y_offset': 0
+    },
+    'roll': {
+        'file': 'assets/player/Roll.png',
+        'frames': 4,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 80,
+        'y_offset': 0
+    },
+    'crouch_attack': {
+        'file': 'assets/player/crouch_attacks.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 60,
         'y_offset': 0
     }
 }

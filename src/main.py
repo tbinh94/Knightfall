@@ -583,6 +583,11 @@ class Player(pygame.sprite.Sprite):
         self.is_dashing = False
         self.can_dash = False # Unlocked after Level 1 Boss
         
+        # Roll Mechanic
+        self.is_rolling = False
+        self.roll_timer = 0
+        self.roll_cooldown = 0
+        
         # Stomp Attack Variables
 
         self.is_stomping = False
@@ -594,7 +599,7 @@ class Player(pygame.sprite.Sprite):
             self.animations[anim_name] = self.load_spritesheet(
                 anim_cfg['file'], anim_cfg['frames'], anim_cfg['frame_width'],
                 anim_cfg['frame_height'], anim_cfg['scale'], anim_cfg['speed'],
-                anim_cfg.get('y_offset', 0)
+                anim_cfg.get('y_offset', 0), anim_cfg.get('start_frame', 0)
             )
         self.image = self.animations[self.state]['frames'][self.current_frame]
         
@@ -603,12 +608,12 @@ class Player(pygame.sprite.Sprite):
         self.pos_y = float(self.hitbox.y)
         self.rect = self.image.get_rect(midbottom=self.hitbox.midbottom)
 
-    def load_spritesheet(self, path, num_frames, frame_w, frame_h, scale, anim_speed, y_offset=0):
+    def load_spritesheet(self, path, num_frames, frame_w, frame_h, scale, anim_speed, y_offset=0, start_frame=0):
         frames = []
         try:
             spritesheet = pygame.image.load(path).convert_alpha()
             cols = spritesheet.get_width() // frame_w
-            for i in range(num_frames):
+            for i in range(start_frame, start_frame + num_frames):
                 row = i // cols
                 col = i % cols
                 rect = pygame.Rect(col * frame_w, row * frame_h, frame_w, frame_h)
@@ -670,6 +675,21 @@ class Player(pygame.sprite.Sprite):
         return False
 
 
+    def roll(self):
+        """Executes roll if on ground and off cooldown."""
+        if self.on_ground and self.roll_cooldown <= 0 and not self.is_rolling:
+            self.is_rolling = True
+            self.roll_timer = ROLL_DURATION
+            self.roll_cooldown = ROLL_COOLDOWN
+            self.state = 'roll'
+            self.current_frame = 0
+            self.anim_timer = 0
+            # Speed boost in the facing direction
+            self.vx = ROLL_SPEED if self.facing_right else -ROLL_SPEED
+            return True
+        return False
+
+
     def attack(self):
         """Triggers an attack animation and state."""
         if not self.is_attacking and not self.wall_state.is_sliding:
@@ -680,6 +700,9 @@ class Player(pygame.sprite.Sprite):
             if not self.on_ground:
                 self.state = 'attack_from_air'
                 self.attack_timer = 500 # Slightly longer for air
+            elif self.is_crouching:
+                self.state = 'crouch_attack'
+                self.attack_timer = 400
             else:
                 # Cycle through attacks or pick random
                 self.attack_combo = (self.attack_combo % 3) + 1
@@ -759,7 +782,7 @@ class Player(pygame.sprite.Sprite):
         if self.dash_cooldown > 0:
             self.dash_cooldown -= delta_time * 1000
 
-        if not self.is_attacking and not self.is_stomping and not self.is_dashing:
+        if not self.is_attacking and not self.is_stomping and not self.is_dashing and not self.is_rolling:
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                 self.vx = -WALK_SPEED
                 self.facing_right = False
@@ -768,9 +791,19 @@ class Player(pygame.sprite.Sprite):
                 self.facing_right = True
             else:
                 self.vx *= PLAYER_DRAG_COEFFICIENT
+        elif self.is_rolling:
+            # Maintain roll speed
+            self.vx = ROLL_SPEED if self.facing_right else -ROLL_SPEED
+            self.roll_timer -= delta_time * 1000
+            if self.roll_timer <= 0:
+                self.is_rolling = False
+                self.state = 'run'
         elif not self.is_dashing:
             # Cannot move horizontally while attacking or stomping
             self.vx *= PLAYER_DRAG_COEFFICIENT
+        
+        if self.roll_cooldown > 0:
+            self.roll_cooldown -= delta_time * 1000
 
         
         if abs(self.vx) < 0.1:
@@ -936,8 +969,8 @@ class Player(pygame.sprite.Sprite):
         previous_state = self.state
         if self.state == 'death':
             pass # Keep death state
-        elif self.is_attacking or self.is_stomping:
-            # Keep the attack state set by attack() or stomp()
+        elif self.is_attacking or self.is_stomping or self.is_rolling:
+            # Keep the state set by attack(), stomp(), or roll()
             pass
         elif self.is_hanging:
             self.state = 'hanging'
@@ -1236,6 +1269,8 @@ class PlayingState(GameState):
                 if event.key == pygame.K_s or event.key == pygame.K_DOWN:
                     if not self.player.on_ground:
                         self.player.stomp()
+                if event.key == pygame.K_v:
+                    self.player.roll()
                 if event.key == pygame.K_ESCAPE: 
                     self.game.running = False
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1332,6 +1367,10 @@ class PlayingState(GameState):
         
         real_collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, False, collided=collide_player_hitbox)
         if real_collisions and self.player.state != 'death':
+            # NEUTRALIZED IF ROLLING
+            if self.player.is_rolling and self.player.roll_timer > (ROLL_DURATION - ROLL_INVINCIBILITY_DURATION):
+                return
+
             obs = real_collisions[0]
             # IF ATTACKING OR STOMPING, DAMAGE ENEMY
             if self.player.is_attacking or (self.player.is_stomping and self.player.stomp_phase == 'dive'):
