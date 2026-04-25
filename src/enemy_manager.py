@@ -336,15 +336,42 @@ def load_enemies():
                 frame = spritesheet.subsurface(rect).copy()
                 
                 cropped = crop_transparent_borders(frame)
-                
-                # Auto-scale large assets
-                if cropped.get_width() > 100:
-                    scale = 0.18 # Balanced scale
-                    new_w = int(cropped.get_width() * scale)
-                    new_h = int(cropped.get_height() * scale)
-                    cropped = pygame.transform.scale(cropped, (new_w, new_h))
-                
                 all_frames.append(cropped)
+            
+            if not all_frames: continue
+            
+            # Normalize frame sizes to prevent animation jitter
+            if len(all_frames) > 1:
+                max_w = max(f.get_width() for f in all_frames)
+                max_h = max(f.get_height() for f in all_frames)
+                
+                normalized_frames = []
+                for frame in all_frames:
+                    if frame.get_width() == max_w and frame.get_height() == max_h:
+                        normalized_frames.append(frame)
+                    else:
+                        # Create a new surface with max size
+                        new_surf = pygame.Surface((max_w, max_h), pygame.SRCALPHA)
+                        # Center the frame
+                        offset_x = (max_w - frame.get_width()) // 2
+                        offset_y = (max_h - frame.get_height()) // 2
+                        new_surf.blit(frame, (offset_x, offset_y))
+                        normalized_frames.append(new_surf)
+                
+                all_frames = normalized_frames
+            
+            # Auto-scale large assets
+            scaled_frames = []
+            for frame in all_frames:
+                if frame.get_width() > 100:
+                    scale = 0.18 # Balanced scale
+                    new_w = int(frame.get_width() * scale)
+                    new_h = int(frame.get_height() * scale)
+                    scaled_frames.append(pygame.transform.scale(frame, (new_w, new_h)))
+                else:
+                    scaled_frames.append(frame)
+            
+            all_frames = scaled_frames
             
             if not all_frames: continue
             
