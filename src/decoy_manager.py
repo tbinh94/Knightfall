@@ -6,20 +6,46 @@ from PIL import Image
 
 LOADED_DECOYS = {}
 
-def _detect_sprite_frames(image_path):
+def detect_sprite_frames(image_path):
+    """
+    Phát hiện số frame trong sprite sheet.
+    Đã lược bỏ phần đoán grid tự động gây lỗi cắt phạm hình ảnh.
+    """
     try:
         img = Image.open(image_path)
         width, height = img.size
+        
+        # Phát hiện kiểu sprite sheet
         if width > height * 1.5:
-            num_frames = width // height
-            return num_frames, height, height, "horizontal"
+            # Sprite sheet ngang (Horizontal)
+            frame_height = height
+            frame_width = height  # Giả định frame vuông
+            num_frames = width // frame_width
+            sheet_type = "horizontal"
+            extra_data = {}
         elif height > width * 1.5:
-            num_frames = height // width
-            return num_frames, width, width, "vertical"
+            # Sprite sheet dọc (Vertical)
+            frame_width = width
+            frame_height = width  # Giả định frame vuông
+            num_frames = height // frame_height
+            sheet_type = "vertical"
+            extra_data = {}
         else:
-            return 1, width, height, "single"
-    except Exception:
-        return 1, 32, 32, "single"
+            # Ảnh đơn (Single frame) - Dù to cỡ nào cũng không tự ý cắt đôi nữa
+            frame_width = width
+            frame_height = height
+            num_frames = 1
+            sheet_type = "single"
+            extra_data = {}
+        
+        print(f"     - Image size: {width}x{height}px")
+        print(f"     - Type: {sheet_type}")
+        print(f"     - Calculated: {num_frames} frames of {frame_width}x{frame_height}px each")
+        
+        return num_frames, frame_width, frame_height, sheet_type, extra_data
+    except Exception as e:
+        print(f"  ⚠️ Could not auto-detect frames for {image_path}: {e}")
+        return 1, 32, 32, "single", {}
 
 def _crop_transparent_borders(surface):
     rect = surface.get_bounding_rect()
