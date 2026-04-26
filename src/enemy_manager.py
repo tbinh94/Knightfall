@@ -63,12 +63,13 @@ class Enemy(pygame.sprite.Sprite):
         self.animations = {}
         if isinstance(frames_data, dict):
             for state, frames in frames_data.items():
-                speed = 0.15
+                speed = config.get('animation_speed', 150) / 1000.0
                 if state == "attack": speed = 0.1
                 self.animations[state] = Animation(frames, speed=speed)
         else:
-            self.animations["idle"] = Animation(frames_data, speed=0.15)
-            self.animations["run"] = Animation(frames_data, speed=0.15)
+            speed = config.get('animation_speed', 150) / 1000.0
+            self.animations["idle"] = Animation(frames_data, speed=speed)
+            self.animations["run"] = Animation(frames_data, speed=speed)
 
         self.image = self.animations[self.state].get_frame()
         self.rect = self.image.get_rect()
@@ -283,7 +284,7 @@ def remove_checkerboard(surface):
     # Thay thế các màu nền bằng màu trong suốt
     px_array = pygame.PixelArray(new_surf)
     for target in background_targets:
-        px_array.replace(target, (0, 0, 0, 0), distance=0.15) 
+        px_array.replace(target, (0, 0, 0, 0), distance=0.1) 
     
     px_array.close()
     return new_surf.convert_alpha()
@@ -464,7 +465,7 @@ ENEMY_CONFIGS = {
     
     # Định nghĩa rõ số cột (cols) và số dòng (rows) để cắt chuẩn
     'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': -5},
-    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.35, 'y_offset': -15},
+    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.35, 'y_offset': -30, 'animation_speed': 100},
     'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -120}, # Quái bay nên y_offset âm
     'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -25}
 }

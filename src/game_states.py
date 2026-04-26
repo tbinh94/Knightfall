@@ -6,7 +6,7 @@ from config import *
 from terrain import load_level, EndlessManager, TerrainGenerator, ObstacleSprite, collide_player_hitbox
 from dialogue_quest import DialogueSystem, QuestManager
 from player import Player
-from enemy_manager import LOADED_ENEMIES, get_random_enemy
+from enemy_manager import LOADED_ENEMIES, get_random_enemy, Enemy
 from decoy_manager import LOADED_DECOYS, get_random_decoy
 from background import ForestBackground, GothicBackground
 from shop_system import ShopSystem
@@ -75,6 +75,7 @@ class PlayingState(GameState):
         self.level_phase = 1
 
     def enter_state(self):
+        pygame.mouse.set_visible(True)
         self.all_sprites.empty()
         self.real_obstacles.empty()
         self.fake_obstacles.empty()
@@ -556,6 +557,11 @@ class PlayingState(GameState):
 
         self.all_sprites.draw(screen)
         
+        # Draw health bars for enemies
+        for sprite in self.all_sprites:
+            if isinstance(sprite, Enemy) and not hasattr(sprite, 'is_player'):  # Exclude player
+                self.draw_enemy_health_bar(screen, sprite)
+        
         self.game.player_stats.draw_hud(screen, self.game.font)
 
         if self.player.wall_state.is_sliding:
@@ -601,6 +607,28 @@ class PlayingState(GameState):
                 if p is None: continue
                 pygame.draw.rect(screen, (80,80,80), 
                                (p.x - self.world_x_offset, p.y, p.length, 6))
+
+    def draw_enemy_health_bar(self, screen, enemy):
+        """Draw health bar above enemy"""
+        if enemy.hp <= 0:
+            return
+        
+        bar_width = 40
+        bar_height = 5
+        bar_x = enemy.rect.centerx - bar_width // 2
+        bar_y = enemy.rect.top - 15
+        
+        # Background
+        pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
+        
+        # Health
+        health_ratio = enemy.hp / enemy.max_hp
+        health_width = int(bar_width * health_ratio)
+        color = (0, 255, 0) if health_ratio > 0.5 else (255, 255, 0) if health_ratio > 0.25 else (255, 0, 0)
+        pygame.draw.rect(screen, color, (bar_x, bar_y, health_width, bar_height))
+        
+        # Border
+        pygame.draw.rect(screen, (200, 200, 200), (bar_x, bar_y, bar_width, bar_height), 1)
 
 class GameOverState(GameState):
     def __init__(self, game):

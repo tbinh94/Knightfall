@@ -9,6 +9,9 @@ const app = new PIXI.Application({
 
 document.getElementById('game-container').appendChild(app.view);
 
+// Fix cursor visibility
+app.renderer.view.style.cursor = 'default';
+
 // Game State
 const state = {
     worldX: 0,
