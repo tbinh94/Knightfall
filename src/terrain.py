@@ -332,21 +332,10 @@ class ObstacleSprite(Enemy):
 
         if sprite_data and self.kind == 'real':
             frames_data = sprite_data.get('frames_data', sprite_data.get('frames'))
-            super().__init__(world_x, y, self.sprite_type, frames_data)
-            
-            if sprite_config:
-                self.scale = sprite_config.get('scale', 1.0)
-                y_offset = sprite_config.get('y_offset', 0)
-                self.world_pos.y += y_offset
-                self.world_pos.x += 15
-                
-                for state in self.animations:
-                    anim = self.animations[state]
-                    scaled_frames = []
-                    for frame in anim.frames:
-                        w, h = frame.get_size()
-                        scaled_frames.append(pygame.transform.scale(frame, (int(w * self.scale), int(h * self.scale))))
-                    anim.frames = scaled_frames
+            y_offset = sprite_config.get('y_offset', 0) if sprite_config else 0
+            super().__init__(world_x, y, self.sprite_type, frames_data, y_offset=y_offset)
+            # Đã scale trong load_enemies(), không scale lại ở đây nữa
+            self.world_pos.x += 15
             
             self.hp = 30
             self.max_hp = 30

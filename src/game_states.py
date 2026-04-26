@@ -330,6 +330,14 @@ class PlayingState(GameState):
                 obs.kill()
             return
 
+        # --- HEALTH & FALL BOUNDS VALIDATION ---
+        if self.player.hitbox.top > SCREEN_H + 100 or self.game.player_stats.hp <= 0:
+            if self.player.state != 'death':
+                self.player.state = 'death'
+                self.player.current_frame = 0
+                self.player.vx = 0
+                self.game.player_stats.hp = 0
+
         self.interaction_prompt = None
         keys = pygame.key.get_pressed()
         

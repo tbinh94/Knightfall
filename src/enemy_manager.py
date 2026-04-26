@@ -438,7 +438,7 @@ def load_enemies():
                 'animation_speed': 150,
                 'auto_y_offset': auto_y_offset
             }
-            print(f"     [OK] Loaded {len(all_frames)} frames → states: {list(frames_by_state.keys())}")
+            print(f"     [OK] Loaded {len(all_frames)} frames -> states: {list(frames_by_state.keys())}")
             
         except Exception as e:
             import traceback
@@ -463,10 +463,10 @@ ENEMY_CONFIGS = {
     'spiked_barricade': {'scale': 1.8},
     
     # Định nghĩa rõ số cột (cols) và số dòng (rows) để cắt chuẩn
-    'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.6, 'y_offset': 20},
-    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.45, 'y_offset': 30},
-    'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -80}, # Quái bay nên y_offset âm
-    'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.5, 'y_offset': 40}
+    'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': -5},
+    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.35, 'y_offset': -15},
+    'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -120}, # Quái bay nên y_offset âm
+    'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -25}
 }
 
 def get_enemy_config(enemy_name):
