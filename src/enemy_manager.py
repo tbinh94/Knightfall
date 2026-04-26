@@ -27,14 +27,9 @@ class Animation:
         self.timer += dt
         if self.timer >= self.speed:
             self.timer = 0
-            self.index += 1
-
-            if self.index >= len(self.frames):
-                if self.loop:
-                    self.index = 0
-                else:
-                    self.index = len(self.frames) - 1
-                    self.done = True
+            self.index = (self.index + 1) % len(self.frames)
+            if self.index == 0 and not self.loop:
+                self.done = True
 
     def get_frame(self):
         if not self.frames:
@@ -48,7 +43,7 @@ class Animation:
 
 # --- ENEMY BASE CLASS ---
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, enemy_type, frames_data):
+    def __init__(self, x, y, enemy_type, frames_data, y_offset=0):
         super().__init__()
         self.enemy_type = enemy_type
 
@@ -61,24 +56,23 @@ class Enemy(pygame.sprite.Sprite):
         self.world_pos = pygame.math.Vector2(x, y)
         self.hp = 30
         self.max_hp = 30
+
+        # FIX: store y_offset so update_rect can use it for correct ground alignment
+        self.y_offset = y_offset
         
-        # Load animations from frames_data
-        # frames_data can be a dict: {"idle": [f1, f2], "run": [...]}
-        # or a flat list (legacy)
         self.animations = {}
         if isinstance(frames_data, dict):
             for state, frames in frames_data.items():
-                speed = 0.15 # Default
+                speed = 0.15
                 if state == "attack": speed = 0.1
                 self.animations[state] = Animation(frames, speed=speed)
         else:
-            # Fallback for single animation sheets
             self.animations["idle"] = Animation(frames_data, speed=0.15)
             self.animations["run"] = Animation(frames_data, speed=0.15)
 
         self.image = self.animations[self.state].get_frame()
         self.rect = self.image.get_rect()
-        self.update_rect(0) # Initial sync
+        self.update_rect(0)
 
     def update_rect(self, world_x_offset):
         screen_x = self.world_pos.x - world_x_offset
@@ -93,25 +87,19 @@ class Enemy(pygame.sprite.Sprite):
 
     def update(self, world_x_offset, dt, player_pos=None):
         """dt: delta time in seconds"""
-        # 1. Update AI State
         self.update_ai(player_pos, world_x_offset)
         
-        # 2. Update Animation
         if self.state in self.animations:
             anim = self.animations[self.state]
             anim.update(dt)
             frame = anim.get_frame()
             
-            # Flip sprite based on direction
             if self.direction == -1:
                 self.image = pygame.transform.flip(frame, True, False)
             else:
                 self.image = frame
         
-        # 3. Apply Velocity
-        self.world_pos += self.velocity * dt * 60 # Scale to roughly match previous movement
-        
-        # 4. Sync Rect
+        self.world_pos += self.velocity * dt * 60
         self.update_rect(world_x_offset)
 
     def update_ai(self, player_pos, world_x_offset=0):
@@ -119,13 +107,12 @@ class Enemy(pygame.sprite.Sprite):
         if not player_pos:
             return
 
-        # Convert player screen pos to world pos
         player_world_x = player_pos.centerx + world_x_offset
-        player_world_y = player_pos.bottom # Assuming player is on ground
+        player_world_y = player_pos.bottom
         
         dist_x = player_world_x - self.world_pos.x
         dist_y = player_world_y - self.world_pos.y
-        distance = abs(dist_x) # Use horizontal distance for simple chase
+        distance = abs(dist_x)
 
         if self.state == "idle":
             if distance < 400:
@@ -139,11 +126,10 @@ class Enemy(pygame.sprite.Sprite):
                 self.move_towards_player(player_world_x)
         
         elif self.state == "attack":
-            if self.animations["attack"].done:
+            if "attack" in self.animations and self.animations["attack"].done:
                 self.change_state("idle")
         
         elif self.state == "hit":
-            # Knockback logic?
             pass
 
     def move_towards_player(self, player_world_x):
@@ -154,15 +140,13 @@ class Enemy(pygame.sprite.Sprite):
             self.velocity.x = -2
             self.direction = -1
         
-        # Check if we have a run animation
         if "run" in self.animations:
             self.change_state("run")
 
     def deal_damage(self):
         """Check for damage at specific frame"""
         if self.state == "attack":
-            # Damage on frame 3 (if exists)
-            if self.animations["attack"].index == 3:
+            if "attack" in self.animations and self.animations["attack"].index == 3:
                 return True
         return False
 
@@ -171,65 +155,105 @@ LOADED_ENEMIES = {}
 
 def detect_sprite_frames(image_path):
     """
-    Tự động phát hiện số frame trong sprite sheet
-    Hỗ trợ nhiều loại sprite sheet:
-    - Ngang (horizontal): width > height
-    - Dọc (vertical): height > width  
-    - Grid: width ≈ height
+    Tự động phát hiện số frame trong sprite sheet.
+    
+    FIX: Đối với ảnh grid vuông (width ≈ height), phát hiện thực tế
+    số cột/hàng bằng cách phân tích alpha channel thay vì hard-code 8 cột.
     """
     try:
-        img = Image.open(image_path)
+        img = Image.open(image_path).convert("RGBA")
         width, height = img.size
-        
-        # Phát hiện kiểu sprite sheet
+        pixels = img.load()
+
         if width > height * 1.5:
-            # Sprite sheet ngang
             frame_height = height
-            frame_width = height  # Giả định frame vuông
+            frame_width = height
             num_frames = width // frame_width
             sheet_type = "horizontal"
             extra_data = {}
+
         elif height > width * 1.5:
-            # Sprite sheet dọc
             frame_width = width
-            frame_height = width  # Giả định frame vuông
+            frame_height = width
             num_frames = height // frame_height
             sheet_type = "vertical"
             extra_data = {}
+
         else:
-            # AI often generates 8x2 or 8x4 grids for 1024x1024 images
-            if width >= 1024:
-                # 8 columns is very common for detailed AI walk cycles
-                num_cols = 8
-                num_rows = 2 if height < 512 else 4
-                frame_width = width // num_cols
-                frame_height = height // num_rows
-                num_frames = num_cols * num_rows
-                sheet_type = "grid"
-                extra_data = {"cols": num_cols, "rows": num_rows}
-            elif width > 400 and height > 400:
-                num_cols = 2
-                num_rows = 2
-                frame_width = width // num_cols
-                frame_height = height // num_rows
-                num_frames = num_cols * num_rows
-                sheet_type = "grid"
-                extra_data = {"cols": num_cols, "rows": num_rows}
-            else:
-                frame_width = width
-                frame_height = height
-                num_frames = 1
-                sheet_type = "single"
-                extra_data = {}
-        
+            # --- FIX: Detect grid dimensions by scanning for empty columns/rows ---
+            # Try common column counts and pick the best fit using vertical alpha profiles
+            best_cols, best_rows = _detect_grid_layout(img, pixels, width, height)
+
+            frame_width = width // best_cols
+            frame_height = height // best_rows
+            num_frames = best_cols * best_rows
+            sheet_type = "grid"
+            extra_data = {"cols": best_cols, "rows": best_rows}
+
         print(f"     - Image size: {width}x{height}px")
         print(f"     - Type: {sheet_type}")
         print(f"     - Calculated: {num_frames} frames of {frame_width}x{frame_height}px each")
         
         return num_frames, frame_width, frame_height, sheet_type, extra_data
+
     except Exception as e:
         print(f"  ⚠️ Could not auto-detect frames for {image_path}: {e}")
         return 1, 32, 32, "single", {}
+
+
+def _detect_grid_layout(img, pixels, width, height):
+    """
+    FIX: Phát hiện số cột và hàng thực tế của grid sprite sheet.
+    Quét các cột dọc và hàng ngang để tìm ranh giới có ít pixel nhất (gần như trống).
+    """
+    # Try candidate column counts
+    candidates_cols = [2, 3, 4, 5, 6, 8]
+    candidates_rows = [1, 2, 3, 4]
+
+    best_cols = 4
+    best_rows = 2
+    best_score = -1
+
+    for num_cols in candidates_cols:
+        if width % num_cols != 0:
+            continue
+        col_w = width // num_cols
+
+        for num_rows in candidates_rows:
+            if height % num_rows != 0:
+                continue
+            row_h = height // num_rows
+
+            # Score: count how many boundary columns/rows are "empty" (low alpha)
+            score = 0
+
+            # Check vertical boundaries between columns
+            for c in range(1, num_cols):
+                x = c * col_w
+                if 0 <= x < width:
+                    col_alpha = sum(pixels[x, y][3] for y in range(0, height, max(1, height // 20)))
+                    # Lower alpha at boundary = better split
+                    score += (height - col_alpha / 255)
+
+            # Check horizontal boundaries between rows
+            for r in range(1, num_rows):
+                y = r * row_h
+                if 0 <= y < height:
+                    row_alpha = sum(pixels[x, y][3] for x in range(0, width, max(1, width // 20)))
+                    score += (width - row_alpha / 255)
+
+            # Prefer layouts that produce a reasonable frame count (4-16 frames)
+            total_frames = num_cols * num_rows
+            if total_frames < 4 or total_frames > 32:
+                continue
+
+            if score > best_score:
+                best_score = score
+                best_cols = num_cols
+                best_rows = num_rows
+
+    return best_cols, best_rows
+
 
 def remove_checkerboard(surface):
     """
@@ -355,6 +379,7 @@ def load_enemies():
             # --- THÊM LOGIC SCALE Ở ĐÂY (Trước đoạn ORGANIZE INTO STATES) ---
             scale_factor = get_enemy_config(enemy_name).get('scale', 0.5)
             scaled_frames = []
+            
             for frame in all_frames:
                 new_w = int(frame.get_width() * scale_factor)
                 new_h = int(frame.get_height() * scale_factor)
@@ -366,18 +391,42 @@ def load_enemies():
             
             # --- ORGANIZE INTO STATES ---
             frames_by_state = {}
-            if sheet_type == "grid" and extra.get("rows", 0) >= 2:
-                rows = extra["rows"]
+            total = len(all_frames)
+
+            if sheet_type == "grid" and "rows" in extra and extra["rows"] >= 2:
                 cols = extra["cols"]
-                states = ["idle", "run", "attack", "death"]
-                for r in range(min(rows, len(states))):
-                    state_name = states[r]
-                    start_idx = r * cols
-                    end_idx = min((r + 1) * cols, len(all_frames))
-                    frames_by_state[state_name] = all_frames[start_idx:end_idx]
+                rows = extra["rows"]
+                frames_per_row = cols
+
+                # Gán state theo thứ tự row
+                state_order = ["idle", "run", "attack", "hit", "death"]
+                for row_idx in range(rows):
+                    if row_idx >= len(state_order):
+                        break
+                    start = row_idx * frames_per_row
+                    end = start + frames_per_row
+                    row_frames = all_frames[start:end]
+                    if row_frames:
+                        frames_by_state[state_order[row_idx]] = row_frames
+
+                # Đảm bảo luôn có đủ 3 state cơ bản
+                if "idle" not in frames_by_state:
+                    frames_by_state["idle"] = all_frames[:frames_per_row]
+                if "run" not in frames_by_state:
+                    frames_by_state["run"] = frames_by_state["idle"]
+                if "attack" not in frames_by_state:
+                    frames_by_state["attack"] = frames_by_state.get("run", all_frames)
+
+            elif total >= 8:
+                # Fallback tuyến tính nếu không phải grid rõ ràng
+                half = total // 2
+                frames_by_state["idle"] = all_frames[:half]
+                frames_by_state["run"] = all_frames[half:]
+                frames_by_state["attack"] = all_frames[half:]
             else:
                 frames_by_state["idle"] = all_frames
                 frames_by_state["run"] = all_frames
+                frames_by_state["attack"] = all_frames
 
             # Không cần offset tự động vì đã crop đồng nhất (union rect)
             auto_y_offset = 0
@@ -389,7 +438,7 @@ def load_enemies():
                 'animation_speed': 150,
                 'auto_y_offset': auto_y_offset
             }
-            print(f"     [OK] Loaded {len(all_frames)} frames in {len(frames_by_state)} states")
+            print(f"     [OK] Loaded {len(all_frames)} frames → states: {list(frames_by_state.keys())}")
             
         except Exception as e:
             import traceback
@@ -398,12 +447,15 @@ def load_enemies():
     
     print(f"\n[OK] Loaded {len(LOADED_ENEMIES)} enemy types.")
 
+
 def get_random_enemy():
     if not LOADED_ENEMIES: return None
     return random.choice(list(LOADED_ENEMIES.keys()))
 
+
 def get_enemy_data(enemy_name):
     return LOADED_ENEMIES.get(enemy_name)
+
 
 ENEMY_CONFIGS = {
     'skeleton': {'animation_speed': 100, 'scale': 1.2},
