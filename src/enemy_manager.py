@@ -51,6 +51,10 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, enemy_type, frames_data):
         super().__init__()
         self.enemy_type = enemy_type
+
+        config = get_enemy_config(enemy_type)
+        self.y_offset = config.get('y_offset', 0)
+
         self.state = "idle"
         self.velocity = pygame.math.Vector2(0, 0)
         self.direction = 1  # 1: right, -1: left
@@ -79,6 +83,8 @@ class Enemy(pygame.sprite.Sprite):
     def update_rect(self, world_x_offset):
         screen_x = self.world_pos.x - world_x_offset
         self.rect.midbottom = (screen_x, self.world_pos.y)
+
+        self.rect.y += self.y_offset
 
     def change_state(self, new_state):
         if new_state in self.animations and self.state != new_state:
@@ -227,67 +233,36 @@ def detect_sprite_frames(image_path):
 
 def remove_checkerboard(surface):
     """
-    🔥 Loại bỏ phông nền checkerboard (ô vuông xám trắng) từ ảnh AI
+    🔥 Loại bỏ phông nền của ảnh AI (màu ở các cạnh)
     """
     width, height = surface.get_size()
     new_surf = surface.copy()
     
-    # Collection phase: find the background colors at the edges
+    # Lấy màu ở 4 góc và các cạnh
     edge_colors = []
-    # Sample edges more densely
-    for x in [0, width-1]:
-        for y in range(0, height, 10):
-            edge_colors.append(surface.get_at((x, y)))
-    for y in [0, height-1]:
-        for x in range(0, width, 10):
-            edge_colors.append(surface.get_at((x, y)))
+    for x in range(width):
+        edge_colors.append(surface.get_at((x, 0)))
+        edge_colors.append(surface.get_at((x, height - 1)))
+    for y in range(height):
+        edge_colors.append(surface.get_at((0, y)))
+        edge_colors.append(surface.get_at((width - 1, y)))
             
-    # Keep only neutral colors (checkerboard is usually grey/white)
+    # Lọc các màu trùng lặp
     background_targets = []
     for c in edge_colors:
-        # If it's a neutral color (R~=G~=B) and not already in targets
-        if abs(c.r - c.g) < 20 and abs(c.g - c.b) < 20:
-            is_new = True
-            for bt in background_targets:
-                if abs(c.r - bt.r) < 10:
-                    is_new = False; break
-            if is_new: background_targets.append(c)
+        is_new = True
+        for bt in background_targets:
+            if abs(c.r - bt.r) < 15 and abs(c.g - bt.g) < 15 and abs(c.b - bt.b) < 15:
+                is_new = False; break
+        if is_new: background_targets.append(c)
 
-    # Execution phase: Use PixelArray for speed
+    # Thay thế các màu nền bằng màu trong suốt
     px_array = pygame.PixelArray(new_surf)
     for target in background_targets:
-        # Use a SMALLER distance to avoid eating the enemy
-        px_array.replace(target, (0, 0, 0, 0), distance=0.08) 
+        px_array.replace(target, (0, 0, 0, 0), distance=0.15) 
     
     px_array.close()
     return new_surf.convert_alpha()
-
-def crop_transparent_borders(surface):
-    """
-    🔥 Tự động crop phần trong suốt xung quanh sprite
-    """
-    # Trước khi crop, xóa checkerboard nếu có
-    surface = remove_checkerboard(surface)
-    
-    rect = surface.get_bounding_rect()
-    if rect.width == 0 or rect.height == 0:
-        return surface
-    
-    cropped = surface.subsurface(rect).copy()
-    return cropped
-
-def auto_detect_ground_position(frame):
-    """
-    🔥 TỰ ĐỘNG TÌM VỊ TRÍ "CHÂN" CỦA SPRITE
-    """
-    width, height = frame.get_size()
-    for y in range(height - 1, -1, -1):
-        for x in range(width):
-            alpha = frame.get_at((x, y)).a
-            if alpha > 10:
-                offset = height - y - 1
-                return -offset
-    return 0
 
 def load_enemies():
     """
@@ -312,10 +287,24 @@ def load_enemies():
         print(f"\n  -> Loading enemy: '{enemy_name}'")
         
         try:
-            num_frames, frame_width, frame_height, sheet_type, extra = detect_sprite_frames(filepath)
-            spritesheet = pygame.image.load(filepath).convert_alpha()
+            config = ENEMY_CONFIGS.get(enemy_name, {})
+            # Ưu tiên lấy cols/rows từ config nếu có
+            if 'cols' in config and 'rows' in config:
+                spritesheet = pygame.image.load(filepath).convert_alpha()
+                spritesheet = remove_checkerboard(spritesheet)
+                
+                num_cols, num_rows = config['cols'], config['rows']
+                frame_width = spritesheet.get_width() // num_cols
+                frame_height = spritesheet.get_height() // num_rows
+                num_frames = num_cols * num_rows
+                sheet_type = "grid"
+                extra = {"cols": num_cols, "rows": num_rows}
+            else:
+                num_frames, frame_width, frame_height, sheet_type, extra = detect_sprite_frames(filepath)
+                spritesheet = pygame.image.load(filepath).convert_alpha()
+                spritesheet = remove_checkerboard(spritesheet)
             
-            all_frames = []
+            clean_frames = []
             
             for i in range(num_frames):
                 if sheet_type == "horizontal":
@@ -334,49 +323,48 @@ def load_enemies():
                 
                 rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
                 frame = spritesheet.subsurface(rect).copy()
-                
-                cropped = crop_transparent_borders(frame)
-                all_frames.append(cropped)
+                clean_frames.append(frame)
             
-            if not all_frames: continue
+            if not clean_frames: continue
             
-            # Normalize frame sizes to prevent animation jitter
-            if len(all_frames) > 1:
-                max_w = max(f.get_width() for f in all_frames)
-                max_h = max(f.get_height() for f in all_frames)
-                
-                normalized_frames = []
-                for frame in all_frames:
-                    if frame.get_width() == max_w and frame.get_height() == max_h:
-                        normalized_frames.append(frame)
-                    else:
-                        # Create a new surface with max size
-                        new_surf = pygame.Surface((max_w, max_h), pygame.SRCALPHA)
-                        # Center the frame
-                        offset_x = (max_w - frame.get_width()) // 2
-                        offset_y = (max_h - frame.get_height()) // 2
-                        new_surf.blit(frame, (offset_x, offset_y))
-                        normalized_frames.append(new_surf)
-                
-                all_frames = normalized_frames
+            # --- TÍNH UNION BOUNDING BOX ĐỂ CROP ĐỒNG NHẤT (CHỐNG JITTER) ---
+            min_left, min_top = clean_frames[0].get_width(), clean_frames[0].get_height()
+            max_right, max_bottom = 0, 0
+            valid_frames = False
             
-            # Auto-scale large assets
+            for frame in clean_frames:
+                rect = frame.get_bounding_rect()
+                if rect.width > 0 and rect.height > 0:
+                    valid_frames = True
+                    min_left = min(min_left, rect.left)
+                    min_top = min(min_top, rect.top)
+                    max_right = max(max_right, rect.right)
+                    max_bottom = max(max_bottom, rect.bottom)
+            
+            if valid_frames:
+                # Tạo một Rect bao quanh phần hiển thị của tất cả các frame
+                union_rect = pygame.Rect(min_left, min_top, max_right - min_left, max_bottom - min_top)
+                
+                # Crop tất cả các frame theo đúng union_rect
+                all_frames = []
+                for frame in clean_frames:
+                    all_frames.append(frame.subsurface(union_rect).copy())
+            else:
+                all_frames = clean_frames
+            
+            # --- THÊM LOGIC SCALE Ở ĐÂY (Trước đoạn ORGANIZE INTO STATES) ---
+            scale_factor = get_enemy_config(enemy_name).get('scale', 0.5)
             scaled_frames = []
             for frame in all_frames:
-                if frame.get_width() > 100:
-                    scale = 0.18 # Balanced scale
-                    new_w = int(frame.get_width() * scale)
-                    new_h = int(frame.get_height() * scale)
-                    scaled_frames.append(pygame.transform.scale(frame, (new_w, new_h)))
-                else:
-                    scaled_frames.append(frame)
+                new_w = int(frame.get_width() * scale_factor)
+                new_h = int(frame.get_height() * scale_factor)
+                scaled_frames.append(pygame.transform.scale(frame, (new_w, new_h)))
             
-            all_frames = scaled_frames
+            all_frames = scaled_frames # Cập nhật lại list frames đã scale
             
             if not all_frames: continue
             
             # --- ORGANIZE INTO STATES ---
-            # If it's a grid (AI often 8x2 or 8x4), split rows into states
             frames_by_state = {}
             if sheet_type == "grid" and extra.get("rows", 0) >= 2:
                 rows = extra["rows"]
@@ -388,11 +376,11 @@ def load_enemies():
                     end_idx = min((r + 1) * cols, len(all_frames))
                     frames_by_state[state_name] = all_frames[start_idx:end_idx]
             else:
-                # Use all frames for both idle and run as fallback
                 frames_by_state["idle"] = all_frames
                 frames_by_state["run"] = all_frames
 
-            auto_y_offset = auto_detect_ground_position(all_frames[0])
+            # Không cần offset tự động vì đã crop đồng nhất (union rect)
+            auto_y_offset = 0
             LOADED_ENEMIES[enemy_name] = {
                 'frames_data': frames_by_state,
                 'frame_width': all_frames[0].get_width(),
@@ -420,13 +408,19 @@ def get_enemy_data(enemy_name):
 ENEMY_CONFIGS = {
     'skeleton': {'animation_speed': 100, 'scale': 1.2},
     'dark_gargoyle': {'scale': 2.0, 'y_offset': 10},
-    'spiked_barricade': {'scale': 1.8}
+    'spiked_barricade': {'scale': 1.8},
+    
+    # Định nghĩa rõ số cột (cols) và số dòng (rows) để cắt chuẩn
+    'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.6, 'y_offset': 20},
+    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.45, 'y_offset': 30},
+    'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -80}, # Quái bay nên y_offset âm
+    'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.5, 'y_offset': 40}
 }
 
 def get_enemy_config(enemy_name):
     enemy_data = get_enemy_data(enemy_name)
     default_config = {
-        'scale': 1.0,
+        'scale': 0.5,
         'animation_speed': enemy_data.get('animation_speed', 150) if enemy_data else 150,
         'y_offset': enemy_data.get('auto_y_offset', 0) if enemy_data else 0,
         'use_static_frame': False
