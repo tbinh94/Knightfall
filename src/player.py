@@ -25,6 +25,7 @@ class Player(pygame.sprite.Sprite):
         self.attack_timer = 0
         self.attack_duration = 400
         self.attack_combo = 0
+        self.invincible_timer = 0.0
         
         self.dash_cooldown = 0
         self.dash_timer = 0
@@ -39,6 +40,8 @@ class Player(pygame.sprite.Sprite):
         self.stomp_phase = None
         self.stomp_timer = 0.0
         self.stomp_cooldown_timer = 0.0
+        
+        self.is_healing = False
         
         for anim_name, anim_cfg in ANIMATION_CONFIG.items():
             self.animations[anim_name] = self.load_spritesheet(
@@ -131,6 +134,10 @@ class Player(pygame.sprite.Sprite):
             self.is_attacking = True
             self.current_frame = 0
             self.anim_timer = 0
+            if not hasattr(self, 'hit_enemies'):
+                self.hit_enemies = set()
+            else:
+                self.hit_enemies.clear()
             
             if not self.on_ground:
                 self.state = 'attack_from_air'
@@ -147,11 +154,27 @@ class Player(pygame.sprite.Sprite):
 
     def stomp(self):
         if not self.on_ground and not self.is_stomping and self.stomp_cooldown_timer <= 0:
-            if self.vy >= -2:
-                self.is_stomping = True
-                self.stomp_phase = 'windup'
-                self.stomp_timer = STOMP_WINDUP_TIME
-                self.state = 'jump_attack_start'
+            self.is_stomping = True
+            self.stomp_phase = 'dive'
+            self.state = 'stomp_down'
+            self.current_frame = 0
+            self.anim_timer = 0
+            self.vx = 0
+            self.vy = STOMP_DIVE_SPEED
+            if not hasattr(self, 'hit_enemies'):
+                self.hit_enemies = set()
+            else:
+                self.hit_enemies.clear()
+            return True
+        return False
+
+    def heal(self, player_stats):
+        if player_stats.hp < player_stats.max_hp and not self.is_healing:
+            if getattr(self, 'heal_charges', 0) > 0:
+                self.heal_charges -= 1
+                player_stats.hp = min(player_stats.max_hp, player_stats.hp + 30)
+                self.is_healing = True
+                self.state = 'heal'
                 self.current_frame = 0
                 self.anim_timer = 0
                 self.vx = 0
@@ -196,6 +219,9 @@ class Player(pygame.sprite.Sprite):
         if self.stomp_cooldown_timer > 0:
             self.stomp_cooldown_timer -= delta_time * 1000
             
+        if hasattr(self, 'invincible_timer') and self.invincible_timer > 0:
+            self.invincible_timer -= delta_time * 1000
+            
         keys = pygame.key.get_pressed()
         if self.is_dashing:
             self.dash_timer -= delta_time * 1000
@@ -208,15 +234,20 @@ class Player(pygame.sprite.Sprite):
         if self.dash_cooldown > 0:
             self.dash_cooldown -= delta_time * 1000
 
-        if not self.is_attacking and not self.is_stomping and not self.is_dashing and not self.is_rolling:
+        if not self.is_attacking and not self.is_stomping and not self.is_dashing and not self.is_rolling and not self.is_healing:
+            current_speed = WALK_SPEED
+            if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                current_speed = WALK_SPEED * 1.5  # Sprint boost
+                
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                self.vx = -WALK_SPEED
+                self.vx = -current_speed
                 self.facing_right = False
             elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                self.vx = WALK_SPEED
+                self.vx = current_speed
                 self.facing_right = True
             else:
                 self.vx *= PLAYER_DRAG_COEFFICIENT
+
         elif self.is_rolling:
             self.vx = ROLL_SPEED if self.facing_right else -ROLL_SPEED
             self.roll_timer -= delta_time * 1000
@@ -366,7 +397,7 @@ class Player(pygame.sprite.Sprite):
         previous_state = self.state
         if self.state == 'death':
             pass
-        elif self.is_attacking or self.is_stomping or self.is_rolling:
+        elif self.is_attacking or self.is_stomping or self.is_rolling or self.is_healing:
             pass
         elif self.is_hanging:
             self.state = 'hanging'
@@ -377,7 +408,11 @@ class Player(pygame.sprite.Sprite):
         elif self.is_crouching:
             self.state = 'crouch'
         elif abs(self.vx) > 0.1:
-            self.state = 'run'
+            if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                self.state = 'run'
+            else:
+                self.state = 'walk'
+
         else:
             self.state = 'idle'
         
@@ -400,8 +435,11 @@ class Player(pygame.sprite.Sprite):
                 self.current_frame += 1
             elif anim_to_play not in ['jump', 'death']:
                 self.current_frame = (self.current_frame + 1) % len(current_anim['frames'])
-                if self.current_frame == 0 and self.is_attacking:
-                    self.is_attacking = False
+                if self.current_frame == 0:
+                    if self.is_attacking:
+                        self.is_attacking = False
+                    if self.is_healing:
+                        self.is_healing = False
         
         self.image = current_anim['frames'][self.current_frame]
         
@@ -410,11 +448,22 @@ class Player(pygame.sprite.Sprite):
             if side == 'left':
                 self.image = pygame.transform.flip(self.image, True, False)
         else:
-            if not self.facing_right:
-                self.image = pygame.transform.flip(self.image, True, False)
+            faces_left = current_anim.get('faces_left', False)
+            if not faces_left:
+                if not self.facing_right:
+                    self.image = pygame.transform.flip(self.image, True, False)
+            else:
+                if self.facing_right:
+                    self.image = pygame.transform.flip(self.image, True, False)
         
         self.rect = self.image.get_rect()
         self.rect.midbottom = self.hitbox.midbottom
         self.rect.y += int(current_anim.get('y_offset', 0))
         
+        
+        if hasattr(self, 'invincible_timer') and self.invincible_timer > 0:
+            if (pygame.time.get_ticks() // 100) % 2 == 0:
+                self.image = self.image.copy()
+                self.image.set_alpha(120)
+                
         return None

@@ -90,6 +90,7 @@ class PlayingState(GameState):
         self.player.anim_timer = 0.0
         self.player.wall_state.reset()
         self.player.jump_queued = False
+        self.player.heal_charges = 3
         self.all_sprites.add(self.player)
         
         if self.game.player_stats.hp <= 0:
@@ -115,8 +116,9 @@ class PlayingState(GameState):
             self.active_segments.append(safe_segment)
             self.cursor_x += SAFE_ZONE_DISTANCE
             
-            while self.cursor_x < self.world_x_offset + SCREEN_W * 1.5:
+            while self.cursor_x < self.world_x_offset + SCREEN_W * 4.0:
                 self._spawn_next_segment()
+
         else:
             self.player.hitbox.bottom = GROUND_Y
             self.player.pos_y = float(self.player.hitbox.y)
@@ -215,6 +217,8 @@ class PlayingState(GameState):
                 if event.key == pygame.K_f or event.key == pygame.K_j:
                     if not self.player.stomp():
                         self.player.attack()
+                if event.key == pygame.K_h:
+                    self.player.heal(self.game.player_stats)
                 if event.key == pygame.K_s or event.key == pygame.K_DOWN:
                     if not self.player.on_ground:
                         self.player.stomp()
@@ -225,9 +229,12 @@ class PlayingState(GameState):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     self.player.attack()
+                elif event.button == 3:
+                    self.player.stomp()
 
     def update(self, delta_time):
         if self.player.state == 'death':
+            self.player.update([], self.world_x_offset, delta_time)
             death_anim = self.player.animations['death']
             if self.player.current_frame >= len(death_anim['frames']) - 1:
                 pygame.time.delay(500)
@@ -298,38 +305,61 @@ class PlayingState(GameState):
         for sprite in self.all_sprites:
             if sprite != self.player:
                 if isinstance(sprite, ObstacleSprite):
-                    sprite.update(self.world_x_offset, delta_time, player_pos=self.player.hitbox)
+                    # Optimize: only update if close to screen to fix lag and unwanted patrol drifting
+                    screen_x = sprite.world_pos.x - self.world_x_offset
+                    if -SCREEN_W <= screen_x <= SCREEN_W * 2:
+                        sprite.update(self.world_x_offset, delta_time, player_pos=self.player.hitbox)
                 else:
                     sprite.update(self.world_x_offset, delta_time)
+
         
         real_collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, False, collided=collide_player_hitbox)
         if real_collisions and self.player.state != 'death':
-            if self.player.is_rolling and self.player.roll_timer > (ROLL_DURATION - ROLL_INVINCIBILITY_DURATION):
-                return
-
             obs = real_collisions[0]
+            
+            # Check for player invincibility
+            is_invincible = False
+            if self.player.is_rolling and self.player.roll_timer > (ROLL_DURATION - ROLL_INVINCIBILITY_DURATION):
+                is_invincible = True
+            if hasattr(self.player, 'invincible_timer') and self.player.invincible_timer > 0:
+                is_invincible = True
+
             if self.player.is_attacking or (self.player.is_stomping and self.player.stomp_phase == 'dive'):
                 if hasattr(obs, 'hp'):
-                    obs.hp -= 20
-                    if obs.hp <= 0:
-                        obs.kill()
-                        self.game.player_stats.gold += 50
+                    if not hasattr(self.player, 'hit_enemies'):
+                        self.player.hit_enemies = set()
+                    
+                    if obs not in self.player.hit_enemies:
+                        self.player.hit_enemies.add(obs)
+                        obs.hp -= 10  # Player attack damage
+                        if obs.hp <= 0:
+                            obs.kill()
+                            self.game.player_stats.gold += 50
                 else:
                     self.game.player_stats.gold += 10
                     obs.kill()
-                return
-                
-            self.game.player_stats.hp -= 10
-            if self.game.player_stats.hp <= 0:
-                self.player.state = 'death'
-                self.player.current_frame = 0
-                self.player.vx = 0
             else:
-                self.player.vx = -10
-                self.player.vy = -5
-                self.player.on_ground = False
-                obs.kill()
+                if not is_invincible:
+                    # Player takes damage from enemy collision
+                    if hasattr(obs, 'hp') and obs.hp > 0:
+                        self.game.player_stats.hp -= 15  # Enemy damage
+                        self.player.invincible_timer = 800  # 0.8s invincible
+                    else:
+                        self.game.player_stats.hp -= 10  # Trap damage
+                        self.player.invincible_timer = 800
+
+                    if self.game.player_stats.hp <= 0:
+                        self.player.state = 'death'
+                        self.player.current_frame = 0
+                        self.player.vx = 0
+                        self.game.player_stats.hp = 0
+                    else:
+                        # Optional knockback on taking damage
+                        self.player.vx = -5 if self.player.facing_right else 5
+                        self.player.vy = -3
+                        self.player.on_ground = False
             return
+
 
         # --- HEALTH & FALL BOUNDS VALIDATION ---
         if self.player.hitbox.top > SCREEN_H + 100 or self.game.player_stats.hp <= 0:
@@ -428,8 +458,9 @@ class PlayingState(GameState):
                     self.all_sprites.add(spike)
 
         if self.is_endless:
-            if self.cursor_x < self.world_x_offset + SCREEN_W * 1.5:
+            if self.cursor_x < self.world_x_offset + SCREEN_W * 4.0:
                 self._spawn_next_segment()
+
             if self.active_segments:
                 first_seg = self.active_segments[0]
                 platforms = first_seg.get("platforms", [first_seg.get("platform")])

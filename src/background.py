@@ -7,21 +7,25 @@ class ParallaxLayer:
     def __init__(self, image_path, speed, screen_h):
         self.original_image = pygame.image.load(image_path).convert_alpha()
         img_w, img_h = self.original_image.get_size()
-        scale_factor = screen_h / img_h
+        # Scale image height to be taller than screen to allow shifting up without leaving gaps at the bottom
+        scale_factor = (screen_h + 250) / img_h
         new_w = int(img_w * scale_factor)
-        self.image = pygame.transform.scale(self.original_image, (new_w, screen_h))
+        self.image = pygame.transform.scale(self.original_image, (new_w, screen_h + 250))
         self.width = self.image.get_width()
         self.speed = speed
+        self.y_offset = -180  # Shift up higher to cover upper areas as requested
+
 
     def draw(self, screen, x_offset):
         rel_x = int(x_offset * self.speed) % self.width
-        screen.blit(self.image, (-rel_x, 0))
+        screen.blit(self.image, (-rel_x, self.y_offset))
         if rel_x > 0:
-            screen.blit(self.image, (self.width - rel_x, 0))
+            screen.blit(self.image, (self.width - rel_x, self.y_offset))
         if self.width - rel_x < SCREEN_W:
             extra_tiles = (SCREEN_W // self.width) + 1
             for i in range(1, extra_tiles):
-                screen.blit(self.image, (self.width * i - rel_x, 0))
+                screen.blit(self.image, (self.width * i - rel_x, self.y_offset))
+
 
 class ForestBackground:
     def __init__(self):
@@ -41,7 +45,9 @@ class ForestBackground:
             ("Layer_0001_8.png", 0.95),   # Very near trees
             ("Layer_0000_9.png", 1.1)     # Foreground bushes
         ]
+
         for filename, speed in layer_configs:
+
             path = os.path.join(bg_dir, filename)
             if os.path.exists(path):
                 self.layers.append(ParallaxLayer(path, speed, SCREEN_H))

@@ -1,45 +1,56 @@
-# game.py (FIXED - Proper pygame and assets initialization)
 import pygame
 import sys
+import os
 
-# Thêm 'src' vào sys.path để có thể import các module từ thư mục src
-sys.path.append('src') 
+# Add src to sys.path so files in src/ can import each other without ModuleNotFoundError
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from src.main import Game
-from src.level_manager import LevelManager
-from src.level_editor import LevelEditor
-from src.config import *
-from src.assets_manager import load_assets
-from src.enemy_manager import load_enemies  # 🔥 Import enemy loader
+from config import SCREEN_W, SCREEN_H, FPS
+from main import Game
+from level_manager import LevelManager
+from level_editor import LevelEditor
+from assets_manager import load_assets, LOADED_THEMES
+from enemy_manager import load_enemies, LOADED_ENEMIES
+from decoy_manager import load_decoys, LOADED_DECOYS
+
 
 def main_app():
-    """
-    Hàm điều phối chính của ứng dụng.
-    Khởi tạo Pygame MỘT LẦN, sau đó load assets, rồi chạy các trạng thái.
-    """
-    # 1. Khởi tạo pygame TRƯỚC
     pygame.init()
-    print("[OK] Pygame initialized in game.py")
+    print("[OK] Pygame initialized")
     
-    # 2. Tạo screen
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+    pygame.display.set_caption("Knightfall - Parkour AI")
     
-    # 3. SAU ĐÓ MỚI load assets (vì pygame đã init)
-    load_assets()
+    # 1. Preload ALL resources
+    print("Preloading assets and entities...")
+    if not LOADED_THEMES: load_assets()
+    if not LOADED_ENEMIES: load_enemies()
+    if not LOADED_DECOYS: load_decoys()
     
-    # 4. Bắt đầu vòng lặp chính
-    print("Bat dau che do Endless Running...")
+    # 2. Main Game Loop with Level Selection
     while True:
-        game = Game(screen, DEFAULT_LEVEL)
-        game_result = game.run() 
+        level_manager = LevelManager(screen)
+        selected_level = level_manager.run()
         
-        # Nếu thoát game, thoát ứng dụng
-        if not pygame.get_init() or game_result == 'QUIT':
+        if selected_level is None:
+            break
+            
+        if selected_level == 'EDITOR':
+            editor = LevelEditor(screen)
+            editor.run()
+            continue
+            
+        # Run selected level
+        level_path = os.path.join("levels", selected_level)
+        game = Game(screen, level_path)
+        game_result = game.run()
+        
+        if game_result == 'QUIT':
             break
 
     print("Exiting application.")
     pygame.quit()
     sys.exit()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main_app()

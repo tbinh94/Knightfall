@@ -337,8 +337,11 @@ class ObstacleSprite(Enemy):
             # Đã scale trong load_enemies(), không scale lại ở đây nữa
             self.world_pos.x += 15
             
-            self.hp = 30
-            self.max_hp = 30
+            # Calculate HP based on distance (progression)
+            base_hp = 50
+            extra_hp = (world_x // 1000) * 20  # +20 HP per 1000 units
+            self.hp = base_hp + extra_hp
+            self.max_hp = self.hp
         else:
             pygame.sprite.Sprite.__init__(self)
             self.world_pos = pygame.math.Vector2(world_x, y)

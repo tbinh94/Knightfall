@@ -1,0 +1,70 @@
+{
+  "skeleton": {
+    "scale": 1.2,
+    "y_offset": 0,
+    "animation_speed": 100,
+    "states": {
+      "idle": {"frames": 8, "speed": 100},
+      "run": {"frames": 8, "speed": 100},
+      "attack": {"frames": 4, "speed": 100}
+    }
+  },
+  "dark_gargoyle": {
+    "scale": 2.0,
+    "y_offset": 0,
+    "animation_speed": 150
+  },
+  "spiked_barricade": {
+    "scale": 1.8,
+    "y_offset": 0,
+    "animation_speed": 150
+  },
+  "rooted_knight_boss": {
+    "scale": 0.5,
+    "y_offset": 0,
+    "animation_speed": 150,
+    "cols": 4,
+    "rows": 3,
+    "states": {
+      "idle": {"row": 0, "frames": 4},
+      "run": {"row": 1, "frames": 4},
+      "attack": {"row": 2, "frames": 4}
+    }
+  },
+  "rotten_bug": {
+    "scale": 0.45,
+    "y_offset": 0,
+    "animation_speed": 100,
+    "cols": 4,
+    "rows": 2,
+    "states": {
+      "idle": {"row": 0, "frames": 4},
+      "run": {"row": 0, "frames": 4},
+      "attack": {"row": 1, "frames": 4}
+    }
+  },
+  "flying_parasite": {
+    "scale": 0.45,
+    "y_offset": -120,
+    "animation_speed": 150,
+    "cols": 4,
+    "rows": 2,
+    "states": {
+      "idle": {"row": 0, "frames": 4},
+      "run": {"row": 0, "frames": 4},
+      "attack": {"row": 1, "frames": 4}
+    }
+  },
+  "forest_ghoul": {
+    "scale": 0.45,
+    "y_offset": 0,
+    "animation_speed": 150,
+    "cols": 4,
+    "rows": 2,
+    "states": {
+      "idle": {"row": 0, "frames": 4},
+      "run": {"row": 0, "frames": 4},
+      "attack": {"row": 1, "frames": 4}
+    }
+  }
+}

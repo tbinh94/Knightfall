@@ -22,7 +22,7 @@ def get_screen_resolution():
 # Có thể override bằng cách set trực tiếp
 SCREEN_W = 1280
 SCREEN_H = 720
-FPS = 40
+FPS = 60
 
 # ============================================
 # SCALE FACTORS (Tự động tính)
@@ -42,11 +42,13 @@ GROUND_Y = SCREEN_H - GROUND_MARGIN_FROM_BOTTOM
 # ============================================
 PLAYER_W = int(33 * SCALE_UNIFORM)
 PLAYER_H = int(54 * SCALE_UNIFORM)
-JUMP_V = -13 * SCALE_UNIFORM
-DOUBLE_JUMP_V = -11 * SCALE_UNIFORM
-GRAVITY = 0.45 * SCALE_UNIFORM
-RUN_SPEED = 3.5 * SCALE_UNIFORM
-WALK_SPEED = 5.0 * SCALE_UNIFORM  # Manual movement speed
+JUMP_V = -20 * SCALE_UNIFORM
+DOUBLE_JUMP_V = -20 * SCALE_UNIFORM
+GRAVITY = 1.0 * SCALE_UNIFORM
+RUN_SPEED = 5.5 * SCALE_UNIFORM
+WALK_SPEED = 8.0 * SCALE_UNIFORM  # Manual movement speed
+
+
 
 # ============================================
 # ENDLESS MODE (Scaled)
@@ -149,6 +151,16 @@ ANIMATION_CONFIG = {
         'speed': 70,
         'y_offset': 0
     },
+    'walk': {
+        'file': 'assets/player/Run.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 120,
+        'y_offset': 0
+    },
+
     'jump': {
         'file': 'assets/player/Jump.png',
         'frames': 8,
@@ -182,12 +194,12 @@ ANIMATION_CONFIG = {
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
-        'speed': 120,
+        'speed': 250,
         'y_offset': 0
     },
     'attack1': {
         'file': 'assets/player/Attacks.png',
-        'frames': 8,
+        'frames': 6,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
@@ -197,23 +209,33 @@ ANIMATION_CONFIG = {
     },
     'attack2': {
         'file': 'assets/player/Attacks.png',
-        'frames': 8,
+        'frames': 7,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
         'speed': 50,
         'y_offset': 0,
-        'start_frame': 8
+        'start_frame': 6
     },
     'attack3': {
         'file': 'assets/player/Attacks.png',
-        'frames': 8,
+        'frames': 7,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
         'speed': 50,
         'y_offset': 0,
-        'start_frame': 16
+        'start_frame': 13
+    },
+
+    'heal': {
+        'file': 'assets/player/Health.png',
+        'frames': 8,
+        'frame_width': 128,
+        'frame_height': 64,
+        'scale': 2.4 * SCALE_UNIFORM,
+        'speed': 100,
+        'y_offset': 0
     },
     'defend': {
         'file': 'assets/player/Idle.png',
@@ -252,8 +274,8 @@ ANIMATION_CONFIG = {
         'y_offset': 0
     },
     'attack_from_air': {
-        'file': 'assets/player/attack_from_air.png',
-        'frames': 7,
+        'file': 'assets/player/attack_mid_air.png',
+        'frames': 8,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
@@ -261,8 +283,8 @@ ANIMATION_CONFIG = {
         'y_offset': 0
     },
     'jump_attack_start': {
-        'file': 'assets/player/attack_from_air.png',
-        'frames': 3,
+        'file': 'assets/player/attack_from_above.png',
+        'frames': 4,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,
@@ -270,8 +292,8 @@ ANIMATION_CONFIG = {
         'y_offset': 0
     },
     'stomp_down': {
-        'file': 'assets/player/attack_from_air.png',
-        'frames': 3,
+        'file': 'assets/player/attack_from_above.png',
+        'frames': 4,
         'frame_width': 128,
         'frame_height': 64,
         'scale': 2.4 * SCALE_UNIFORM,

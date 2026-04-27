@@ -5,18 +5,17 @@
     "display_name": "Level 1: The Withered Forest",
     "description": "The kingdom has fallen. The forest is now a graveyard of souls.",
     "difficulty": "Easy/Medium",
-    "target_distance": 3000
+    "target_distance": 6000
   },
   "sections": [
     {
       "comment": "Phase 1: Tutorial (0 - 500m)",
       "type": "straight",
-      "length": 500,
+      "length": 800,
       "platform_y": 600,
       "obstacles": [
         { "x": 100, "kind": "decor", "type": "lore_popup", "text": "Move: A/D | Jump: Space | Attack: J" },
-        { "x": 300, "kind": "real", "type": "rotten_bug" },
-        { "x": 450, "kind": "real", "type": "rotten_bug" }
+        { "x": 500, "kind": "real", "type": "rotten_bug" }
       ]
     },
     {
@@ -32,9 +31,7 @@
       ],
       "obstacles": [
         { "platform_index": 0, "x": 150, "kind": "real", "type": "forest_ghoul" },
-        { "platform_index": 1, "x": 50, "kind": "real", "type": "spike" },
-        { "platform_index": 2, "x": 100, "kind": "decor", "type": "dead_knight", "text": "They came from beneath..." },
-        { "platform_index": 2, "x": 200, "kind": "real", "type": "flying_parasite" }
+        { "platform_index": 2, "x": 150, "kind": "real", "type": "flying_parasite" }
       ]
     },
     {
@@ -50,9 +47,7 @@
       ],
       "obstacles": [
         { "platform_index": 0, "x": 100, "kind": "real", "type": "corrupted_guard" },
-        { "platform_index": 1, "x": 50, "kind": "real", "type": "moving_platform" },
-        { "platform_index": 2, "x": 75, "kind": "real", "type": "corrupted_guard" },
-        { "x": 900, "kind": "decor", "type": "low_visibility_trigger" }
+        { "platform_index": 3, "x": 100, "kind": "real", "type": "corrupted_guard" }
       ]
     },
     {
@@ -62,7 +57,51 @@
       "platform_y": 600,
       "obstacles": [
         { "x": 100, "kind": "decor", "type": "boss_trigger" },
-        { "x": 250, "kind": "real", "type": "rooted_knight_boss" }
+        { "x": 350, "kind": "real", "type": "rooted_knight_boss" }
+      ]
+    },
+    {
+      "comment": "Phase 5: Escalation (3000 - 4000m)",
+      "type": "gap",
+      "length": 1000,
+      "base_y": 600,
+      "platforms": [
+        { "x": 0, "width": 250, "y_offset": 0 },
+        { "x": 300, "width": 200, "y_offset": -120 },
+        { "x": 550, "width": 250, "y_offset": 0 },
+        { "x": 850, "width": 150, "y_offset": -80 }
+      ],
+      "obstacles": [
+        { "platform_index": 0, "x": 120, "kind": "real", "type": "corrupted_guard" },
+        { "platform_index": 2, "x": 120, "kind": "real", "type": "flying_parasite" }
+      ]
+    },
+    {
+      "comment": "Phase 6: Chaos (4000 - 5000m)",
+      "type": "gap",
+      "length": 1000,
+      "base_y": 600,
+      "platforms": [
+        { "x": 0, "width": 400, "y_offset": 0 },
+        { "x": 450, "width": 150, "y_offset": -150 },
+        { "x": 650, "width": 200, "y_offset": 0 },
+        { "x": 900, "width": 150, "y_offset": -100 },
+        { "x": 1100, "width": 100, "y_offset": -200 }
+      ],
+      "obstacles": [
+        { "platform_index": 0, "x": 200, "kind": "real", "type": "forest_ghoul" },
+        { "platform_index": 2, "x": 100, "kind": "real", "type": "corrupted_guard" },
+        { "platform_index": 3, "x": 75, "kind": "real", "type": "flying_parasite" }
+      ]
+    },
+    {
+      "comment": "Phase 7: Final Assault (5000 - 6000m)",
+      "type": "straight",
+      "length": 1000,
+      "platform_y": 600,
+      "obstacles": [
+        { "x": 300, "kind": "real", "type": "corrupted_guard" },
+        { "x": 700, "kind": "real", "type": "rooted_knight_boss" }
       ]
     }
   ]

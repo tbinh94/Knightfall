@@ -54,11 +54,15 @@ class Enemy(pygame.sprite.Sprite):
         self.velocity = pygame.math.Vector2(0, 0)
         self.direction = 1  # 1: right, -1: left
         self.world_pos = pygame.math.Vector2(x, y)
+        self.patrol_left = x - 100
+        self.patrol_right = x + 100
+        self.patrol_direction = 1  # 1: right, -1: left
         self.hp = 30
         self.max_hp = 30
 
         # FIX: store y_offset so update_rect can use it for correct ground alignment
         self.y_offset = y_offset
+        self.attack_range = config.get('attack_range', 40)
         
         self.animations = {}
         if isinstance(frames_data, dict):
@@ -104,7 +108,7 @@ class Enemy(pygame.sprite.Sprite):
         self.update_rect(world_x_offset)
 
     def update_ai(self, player_pos, world_x_offset=0):
-        """Simple AI State Machine"""
+        """Simple AI State Machine with patrol and chase"""
         if not player_pos:
             return
 
@@ -116,15 +120,33 @@ class Enemy(pygame.sprite.Sprite):
         distance = abs(dist_x)
 
         if self.state == "idle":
+            # Patrol between left and right
+            if self.patrol_direction == 1 and self.world_pos.x >= self.patrol_right:
+                self.patrol_direction = -1
+            elif self.patrol_direction == -1 and self.world_pos.x <= self.patrol_left:
+                self.patrol_direction = 1
+            
+            self.velocity.x = self.patrol_direction * 2  # Patrol speed
+            self.direction = self.patrol_direction
+            
             if distance < 400:
                 self.change_state("run")
         
         elif self.state == "run":
-            if distance < 80:
+            if distance > 600:
+                self.change_state("idle")
+            elif distance < getattr(self, 'attack_range', 40) and abs(dist_y) < 60:
+                # Face player before attacking
+                if player_world_x > self.world_pos.x:
+                    self.direction = 1
+                else:
+                    self.direction = -1
                 self.change_state("attack")
                 self.velocity.x = 0
             else:
                 self.move_towards_player(player_world_x)
+
+
         
         elif self.state == "attack":
             if "attack" in self.animations and self.animations["attack"].done:
@@ -399,16 +421,22 @@ def load_enemies():
                 rows = extra["rows"]
                 frames_per_row = cols
 
-                # Gán state theo thứ tự row
-                state_order = ["idle", "run", "attack", "hit", "death"]
-                for row_idx in range(rows):
-                    if row_idx >= len(state_order):
-                        break
-                    start = row_idx * frames_per_row
-                    end = start + frames_per_row
-                    row_frames = all_frames[start:end]
-                    if row_frames:
-                        frames_by_state[state_order[row_idx]] = row_frames
+                if rows == 2:
+                    # Đối với ảnh có đúng 2 dòng: Dòng 0 là Idle/Run, Dòng 1 là Attack
+                    frames_by_state["idle"] = all_frames[0:cols]
+                    frames_by_state["run"] = all_frames[0:cols]
+                    frames_by_state["attack"] = all_frames[cols:2*cols]
+                else:
+                    # Gán state theo thứ tự row
+                    state_order = ["idle", "run", "attack", "hit", "death"]
+                    for row_idx in range(rows):
+                        if row_idx >= len(state_order):
+                            break
+                        start = row_idx * frames_per_row
+                        end = start + frames_per_row
+                        row_frames = all_frames[start:end]
+                        if row_frames:
+                            frames_by_state[state_order[row_idx]] = row_frames
 
                 # Đảm bảo luôn có đủ 3 state cơ bản
                 if "idle" not in frames_by_state:
@@ -458,17 +486,30 @@ def get_enemy_data(enemy_name):
     return LOADED_ENEMIES.get(enemy_name)
 
 
-ENEMY_CONFIGS = {
-    'skeleton': {'animation_speed': 100, 'scale': 1.2},
-    'dark_gargoyle': {'scale': 2.0, 'y_offset': 10},
-    'spiked_barricade': {'scale': 1.8},
-    
-    # Định nghĩa rõ số cột (cols) và số dòng (rows) để cắt chuẩn
-    'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': -5},
-    'rotten_bug':         {'cols': 5, 'rows': 2, 'scale': 0.35, 'y_offset': -30, 'animation_speed': 100},
-    'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -120}, # Quái bay nên y_offset âm
-    'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -25}
-}
+# Load ENEMY_CONFIGS from JSON
+ENEMY_CONFIGS = {}
+json_path = "assets/enemies.json"
+if os.path.exists(json_path):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            ENEMY_CONFIGS = json.load(f)
+        print(f"[OK] Loaded {len(ENEMY_CONFIGS)} enemy configs from {json_path}")
+    except Exception as e:
+        print(f"⚠️ Could not load {json_path}: {e}")
+
+# Fallback in case JSON is empty or failed
+if not ENEMY_CONFIGS:
+    ENEMY_CONFIGS = {
+        'skeleton': {'animation_speed': 100, 'scale': 1.2},
+        'dark_gargoyle': {'scale': 2.0, 'y_offset': 0},
+        'spiked_barricade': {'scale': 1.8},
+        'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': 0},
+        'rotten_bug':         {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': 0, 'animation_speed': 100},
+        'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -120}, 
+        'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': 0}
+    }
+
+
 
 def get_enemy_config(enemy_name):
     enemy_data = get_enemy_data(enemy_name)
