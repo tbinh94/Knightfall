@@ -57,8 +57,8 @@ class Enemy(pygame.sprite.Sprite):
         self.patrol_left = x - 100
         self.patrol_right = x + 100
         self.patrol_direction = 1  # 1: right, -1: left
-        self.hp = 30
-        self.max_hp = 30
+        self.hp = 20
+        self.max_hp = 20
 
         # FIX: store y_offset so update_rect can use it for correct ground alignment
         self.y_offset = y_offset
@@ -129,11 +129,11 @@ class Enemy(pygame.sprite.Sprite):
             self.velocity.x = self.patrol_direction * 2  # Patrol speed
             self.direction = self.patrol_direction
             
-            if distance < 400:
+            if distance < 250:
                 self.change_state("run")
         
         elif self.state == "run":
-            if distance > 600:
+            if distance > 400:
                 self.change_state("idle")
             elif distance < getattr(self, 'attack_range', 40) and abs(dist_y) < 60:
                 # Face player before attacking
@@ -149,6 +149,10 @@ class Enemy(pygame.sprite.Sprite):
 
         
         elif self.state == "attack":
+            if player_world_x > self.world_pos.x:
+                self.direction = 1
+            else:
+                self.direction = -1
             if "attack" in self.animations and self.animations["attack"].done:
                 self.change_state("idle")
         

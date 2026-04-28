@@ -331,7 +331,8 @@ class PlayingState(GameState):
                     
                     if obs not in self.player.hit_enemies:
                         self.player.hit_enemies.add(obs)
-                        obs.hp -= 10  # Player attack damage
+                        damage = 20 + getattr(self.game.player_stats, 'atk_bonus', 0)
+                        obs.hp -= damage  # Player attack damage (buffed from 10)
                         if obs.hp <= 0:
                             obs.kill()
                             self.game.player_stats.gold += 50
@@ -342,7 +343,7 @@ class PlayingState(GameState):
                 if not is_invincible:
                     # Player takes damage from enemy collision
                     if hasattr(obs, 'hp') and obs.hp > 0:
-                        self.game.player_stats.hp -= 15  # Enemy damage
+                        self.game.player_stats.hp -= 10  # Enemy damage (reduced from 15)
                         self.player.invincible_timer = 800  # 0.8s invincible
                     else:
                         self.game.player_stats.hp -= 10  # Trap damage
@@ -416,8 +417,8 @@ class PlayingState(GameState):
                     for boss_obs in self.real_obstacles:
                         if boss_obs.sprite_type == 'rooted_knight_boss':
                             self.boss_instance = boss_obs
-                            self.boss_instance.hp = 100
-                            self.boss_instance.max_hp = 100
+                            self.boss_instance.hp = 80
+                            self.boss_instance.max_hp = 80
                             break
 
         self.quests.update(self.world_x_offset)

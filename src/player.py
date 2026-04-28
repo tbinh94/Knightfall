@@ -431,9 +431,9 @@ class Player(pygame.sprite.Sprite):
         
         if self.anim_timer > current_anim['speed']:
             self.anim_timer %= current_anim['speed']
-            if anim_to_play in ['jump', 'death'] and self.current_frame < len(current_anim['frames']) - 1:
+            if anim_to_play in ['jump', 'death', 'stomp_down'] and self.current_frame < len(current_anim['frames']) - 1:
                 self.current_frame += 1
-            elif anim_to_play not in ['jump', 'death']:
+            elif anim_to_play not in ['jump', 'death', 'stomp_down']:
                 self.current_frame = (self.current_frame + 1) % len(current_anim['frames'])
                 if self.current_frame == 0:
                     if self.is_attacking:
