@@ -350,18 +350,7 @@ def scale_value(value):
 # ============================================
 def print_resolution_info():
     """In thông tin resolution để debug"""
-    print("\n" + "="*50)
-    print("[RESPONSIVE CONFIGURATION]")
-    print("="*50)
-    print(f"Base Resolution: {BASE_WIDTH}x{BASE_HEIGHT}")
-    print(f"Current Resolution: {SCREEN_W}x{SCREEN_H}")
-    print(f"Scale Factor X: {SCALE_X:.2f}")
-    print(f"Scale Factor Y: {SCALE_Y:.2f}")
-    print(f"Uniform Scale: {SCALE_UNIFORM:.2f}")
-    print(f"Ground Y: {GROUND_Y} (from bottom: {SCREEN_H - GROUND_Y})")
-    print(f"Player Size: {PLAYER_W}x{PLAYER_H}")
-    print(f"Tile Size: {TILE_SIZE}")
-    print("="*50 + "\n")
+    pass
 
 if __name__ == "__main__":
     pygame.init()

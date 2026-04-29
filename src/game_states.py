@@ -527,12 +527,21 @@ class PlayingState(GameState):
 
         if hasattr(self.background, 'tiles') and self.background.tiles:
             g_tiles = self.background.tiles
-            tile_top_left = pygame.transform.scale(g_tiles[3][0], (32, 32))
-            tile_top_middle = pygame.transform.scale(g_tiles[3][1], (32, 32))
-            tile_top_right = pygame.transform.scale(g_tiles[3][2], (32, 32))
-            tile_middle_left = pygame.transform.scale(g_tiles[2][0], (32, 32))
-            tile_middle_right = pygame.transform.scale(g_tiles[2][2], (32, 32))
-            tile_fill = pygame.transform.scale(g_tiles[2][1], (32, 32))
+            if not hasattr(self, 'cached_g_tiles'):
+                self.cached_g_tiles = {
+                    'top_left': pygame.transform.scale(g_tiles[3][0], (32, 32)),
+                    'top_middle': pygame.transform.scale(g_tiles[3][1], (32, 32)),
+                    'top_right': pygame.transform.scale(g_tiles[3][2], (32, 32)),
+                    'middle_left': pygame.transform.scale(g_tiles[2][0], (32, 32)),
+                    'middle_right': pygame.transform.scale(g_tiles[2][2], (32, 32)),
+                    'fill': pygame.transform.scale(g_tiles[2][1], (32, 32)),
+                }
+            tile_top_left = self.cached_g_tiles['top_left']
+            tile_top_middle = self.cached_g_tiles['top_middle']
+            tile_top_right = self.cached_g_tiles['top_right']
+            tile_middle_left = self.cached_g_tiles['middle_left']
+            tile_middle_right = self.cached_g_tiles['middle_right']
+            tile_fill = self.cached_g_tiles['fill']
         else:
             tile_top_left = self.active_theme_tiles.get('wall_top_left')
             tile_top_middle = self.active_theme_tiles.get('wall_top_middle')
@@ -610,9 +619,12 @@ class PlayingState(GameState):
             
             tile_to_use = self.active_theme_tiles.get('wall_middle_left')
             if tile_to_use:
-                scaled_tile = pygame.transform.scale(tile_to_use, 
-                                                     (wall_tile.width, wall_tile.tile_height))
-                screen.blit(scaled_tile, (int(wall_rect.x), int(wall_rect.y)))
+                if not hasattr(self, 'scaled_wall_tiles'):
+                    self.scaled_wall_tiles = {}
+                size_key = (wall_tile.width, wall_tile.tile_height)
+                if size_key not in self.scaled_wall_tiles:
+                    self.scaled_wall_tiles[size_key] = pygame.transform.scale(tile_to_use, size_key)
+                screen.blit(self.scaled_wall_tiles[size_key], (int(wall_rect.x), int(wall_rect.y)))
             else:
                 pygame.draw.rect(screen, (100, 100, 80), wall_rect)
 

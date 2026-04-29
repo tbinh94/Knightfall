@@ -359,7 +359,7 @@ def load_enemies():
     if not pygame.display.get_surface():
         pygame.display.set_mode((1, 1), pygame.NOFRAME | pygame.HIDDEN)
     
-    enemy_folders = [f for f in os.listdir(enemies_dir) if os.path.isdir(os.path.join(enemies_dir, f)) and f == 'dark_knight']
+    enemy_folders = [f for f in os.listdir(enemies_dir) if os.path.isdir(os.path.join(enemies_dir, f))]
     for folder in enemy_folders:
         folder_path = os.path.join(enemies_dir, folder)
         enemy_name = folder
@@ -483,7 +483,7 @@ def load_enemies():
             }
             print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas)")
 
-    enemy_files = [] # Temporarily hidden to focus on dark_knight format
+    enemy_files = [f for f in os.listdir(enemies_dir) if f.endswith('.png')]
     if not enemy_files and not enemy_folders: return
     
     if not pygame.display.get_surface():

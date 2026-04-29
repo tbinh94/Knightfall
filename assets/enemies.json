@@ -7,6 +7,14 @@
     "animation_speed": 150,
     "union_crop": true
   },
+  "undead_soldier": {
+    "cols": 5,
+    "rows": 3,
+    "scale": 0.25,
+    "y_offset": 0,
+    "animation_speed": 150,
+    "union_crop": true
+  },
   "corrupted_guard": {
     "scale": 0.5,
     "y_offset": 0,

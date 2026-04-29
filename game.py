@@ -16,13 +16,13 @@ from decoy_manager import load_decoys, LOADED_DECOYS
 
 def main_app():
     pygame.init()
-    print("[OK] Pygame initialized")
+    # print("[OK] Pygame initialized")
     
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
     pygame.display.set_caption("Knightfall - Parkour AI")
     
     # 1. Preload ALL resources
-    print("Preloading assets and entities...")
+    # print("Preloading assets and entities...")
     if not LOADED_THEMES: load_assets()
     if not LOADED_ENEMIES: load_enemies()
     if not LOADED_DECOYS: load_decoys()
@@ -48,7 +48,7 @@ def main_app():
         if game_result == 'QUIT':
             break
 
-    print("Exiting application.")
+    # print("Exiting application.")
     pygame.quit()
     sys.exit()
 

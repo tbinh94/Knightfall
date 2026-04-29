@@ -71,11 +71,11 @@ class LevelManager:
                     discovered_levels.append(level_info)
                 
             except Exception as e:
-                print(f"⚠️ Warning: Could not load {filepath}: {e}")
+                pass
         
         discovered_levels.sort(key=lambda x: x["order"])
         
-        print(f"[OK] Discovered {len(discovered_levels)} regular levels and {len(special_modes)} special modes.")
+        # print(f"[OK] Discovered {len(discovered_levels)} regular levels and {len(special_modes)} special modes.")
         return discovered_levels, special_modes
 
     def load_progress(self):
@@ -94,13 +94,13 @@ class LevelManager:
     def complete_level(self, filename):
         item_data = next((item for item in self.menu_items if item["filename"] == filename), None)
         if item_data and item_data.get("is_special_mode"):
-            print(f"ℹ️ Endless mode run ended. No progress saved.")
+            # print(f"ℹ️ Endless mode run ended. No progress saved.")
             return
 
         if filename not in self.completed_levels:
             self.completed_levels.add(filename)
             self.save_progress()
-            print(f"[OK] Progress saved: {filename}")
+            # print(f"[OK] Progress saved: {filename}")
 
     def get_difficulty_color(self, difficulty):
         """Trả về màu dựa trên độ khó"""
@@ -282,7 +282,7 @@ class LevelManager:
                     if is_unlocked:
                         return filename
                     else:
-                        print("⚠️ Level is locked! Complete previous level first.")
+                        pass
                 
                 elif event.key == pygame.K_ESCAPE:
                     return None

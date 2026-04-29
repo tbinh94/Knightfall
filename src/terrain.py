@@ -364,9 +364,7 @@ class ObstacleSprite(Enemy):
                 self.image = self.animations["idle"].get_frame()
             else:
                 width, height = (30, 50)
-                color = (200, 40, 40) if kind == 'real' else (120, 120, 220)
-                self.image = pygame.Surface([width, height])
-                self.image.fill(color)
+                self.image = pygame.Surface([width, height], pygame.SRCALPHA)
                 self.animations["idle"] = Animation([self.image])
             
             self.rect = self.image.get_rect()

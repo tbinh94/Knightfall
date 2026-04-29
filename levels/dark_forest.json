@@ -23,7 +23,7 @@
         {
           "x": 500,
           "kind": "real",
-          "type": "rotten_bug"
+          "type": "undead_soldier"
         }
       ]
     },
@@ -101,7 +101,7 @@
           "platform_index": 0,
           "x": 100,
           "kind": "real",
-          "type": "corrupted_guard"
+          "type": "undead_soldier"
         },
         {
           "platform_index": 3,

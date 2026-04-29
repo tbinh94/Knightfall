@@ -38,9 +38,9 @@ def detect_sprite_frames(image_path):
             sheet_type = "single"
             extra_data = {}
         
-        print(f"     - Image size: {width}x{height}px")
-        print(f"     - Type: {sheet_type}")
-        print(f"     - Calculated: {num_frames} frames of {frame_width}x{frame_height}px each")
+        # print(f"     - Image size: {width}x{height}px")
+        # print(f"     - Type: {sheet_type}")
+        # print(f"     - Calculated: {num_frames} frames of {frame_width}x{frame_height}px each")
         
         return num_frames, frame_width, frame_height, sheet_type, extra_data
     except Exception as e:
