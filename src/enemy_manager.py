@@ -3,6 +3,8 @@ import json
 import os
 import random
 from PIL import Image
+import numpy as np
+
 
 # --- ANIMATION SYSTEM ---
 class Animation:
@@ -111,6 +113,16 @@ class Enemy(pygame.sprite.Sprite):
                 self.image = pygame.transform.flip(frame, True, False)
             else:
                 self.image = frame
+            
+            # FIX JITTER: keep rect size stable - only update position, not size
+            # The normalized canvas guarantees all frames are the same size anyway,
+            # but flip() creates new surface, so we must keep rect size locked.
+            old_w, old_h = self.rect.width, self.rect.height
+            if self.image.get_width() != old_w or self.image.get_height() != old_h:
+                # Re-anchor rect to same midbottom when size changes
+                old_midbottom = self.rect.midbottom
+                self.rect = self.image.get_rect()
+                self.rect.midbottom = old_midbottom
                 
         # --- RED TINT EFFECT FOR HIT STATE ---
         if self.state == "hit" and hasattr(self, 'image') and self.image:
@@ -252,8 +264,8 @@ def _detect_grid_layout(img, pixels, width, height):
     Quét các cột dọc và hàng ngang để tìm ranh giới có ít pixel nhất (gần như trống).
     """
     # Try candidate column counts
-    candidates_cols = [2, 3, 4, 5, 6, 8]
-    candidates_rows = [1, 2, 3, 4]
+    candidates_cols = [2, 3, 4, 5, 6, 8, 10, 11, 12, 14, 16]
+    candidates_rows = [1, 2, 3, 4, 5, 6, 8, 10]
 
     best_cols = 4
     best_rows = 2
@@ -309,10 +321,10 @@ def remove_checkerboard(surface):
     
     # Lấy màu ở 4 góc và các cạnh
     edge_colors = []
-    for x in range(width):
+    for x in range(0, width, 50):
         edge_colors.append(surface.get_at((x, 0)))
         edge_colors.append(surface.get_at((x, height - 1)))
-    for y in range(height):
+    for y in range(0, height, 50):
         edge_colors.append(surface.get_at((0, y)))
         edge_colors.append(surface.get_at((width - 1, y)))
             
@@ -347,7 +359,7 @@ def load_enemies():
     if not pygame.display.get_surface():
         pygame.display.set_mode((1, 1), pygame.NOFRAME | pygame.HIDDEN)
     
-    enemy_folders = [f for f in os.listdir(enemies_dir) if os.path.isdir(os.path.join(enemies_dir, f))]
+    enemy_folders = [f for f in os.listdir(enemies_dir) if os.path.isdir(os.path.join(enemies_dir, f)) and f == 'dark_knight']
     for folder in enemy_folders:
         folder_path = os.path.join(enemies_dir, folder)
         enemy_name = folder
@@ -366,9 +378,25 @@ def load_enemies():
             for filename in file_options:
                 filepath = os.path.join(folder_path, filename)
                 if os.path.exists(filepath):
-                    num_frames, frame_width, frame_height, sheet_type, extra = detect_sprite_frames(filepath)
                     spritesheet = pygame.image.load(filepath).convert_alpha()
                     spritesheet = remove_checkerboard(spritesheet)
+                    
+                    config = get_enemy_config(enemy_name)
+                    if 'cols' in config and 'rows' in config:
+                        num_cols, num_rows = config['cols'], config['rows']
+                        frame_width = spritesheet.get_width() // num_cols
+                        frame_height = spritesheet.get_height() // num_rows
+                        num_frames = num_cols * num_rows
+                        sheet_type = "grid"
+                        extra = {"cols": num_cols, "rows": num_rows}
+                    elif config.get('use_static_frame', False):
+                        num_frames = 1
+                        frame_width = spritesheet.get_width()
+                        frame_height = spritesheet.get_height()
+                        sheet_type = "single"
+                        extra = {}
+                    else:
+                        num_frames, frame_width, frame_height, sheet_type, extra = detect_sprite_frames(filepath)
                     
                     state_frames = []
                     for i in range(num_frames):
@@ -391,6 +419,25 @@ def load_enemies():
                         state_frames.append(frame)
                     
                     if state_frames:
+                        # Per-frame tight bounding-box crop
+                        cropped_frames = []
+                        for f in state_frames:
+                            alpha_arr = pygame.surfarray.array_alpha(f)
+                            # Find bounding box of content (alpha > 10)
+                            non_zero = np.where(alpha_arr > 10)
+                            if len(non_zero[0]) > 0 and len(non_zero[1]) > 0:
+                                min_x, max_x = np.min(non_zero[0]), np.max(non_zero[0])
+                                min_y, max_y = np.min(non_zero[1]), np.max(non_zero[1])
+                                
+                                # Crop frame directly to character bounds
+                                char_rect = pygame.Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+                                char_surf = f.subsurface(char_rect).copy()
+                                cropped_frames.append(char_surf)
+                            else:
+                                # Frame is essentially blank, keep it empty
+                                cropped_frames.append(f)
+                        state_frames = cropped_frames
+
                         scale_factor = get_enemy_config(enemy_name).get('scale', 0.5)
                         scaled_state_frames = []
                         for f in state_frames:
@@ -409,18 +456,34 @@ def load_enemies():
                 frames_by_state["run"] = frames_by_state.get("idle", all_frames_loaded)
             if "attack" not in frames_by_state:
                 frames_by_state["attack"] = frames_by_state.get("run", all_frames_loaded)
+
+            # --- FIX JITTER: Normalize all frames to same canvas size, anchored at bottom ---
+            max_w = max(f.get_width() for frames in frames_by_state.values() for f in frames)
+            max_h = max(f.get_height() for frames in frames_by_state.values() for f in frames)
+
+            normalized_by_state = {}
+            for st, frames in frames_by_state.items():
+                norm_frames = []
+                for f in frames:
+                    canvas = pygame.Surface((max_w, max_h), pygame.SRCALPHA)
+                    dst_x = (max_w - f.get_width()) // 2
+                    dst_y = max_h - f.get_height()  # anchor to bottom
+                    canvas.blit(f, (dst_x, dst_y))
+                    norm_frames.append(canvas)
+                normalized_by_state[st] = norm_frames
+            frames_by_state = normalized_by_state
                 
             LOADED_ENEMIES[enemy_name] = {
                 'frames_data': frames_by_state,
-                'frame_width': all_frames_loaded[0].get_width() if all_frames_loaded else 32,
-                'frame_height': all_frames_loaded[0].get_height() if all_frames_loaded else 32,
-                'num_frames': len(all_frames_loaded),
+                'frame_width': max_w,
+                'frame_height': max_h,
+                'num_frames': sum(len(v) for v in frames_by_state.values()),
                 'animation_speed': 150,
                 'auto_y_offset': 0
             }
-            print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())}")
+            print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas)")
 
-    enemy_files = [f for f in os.listdir(enemies_dir) if f.endswith('.png')]
+    enemy_files = [] # Temporarily hidden to focus on dark_knight format
     if not enemy_files and not enemy_folders: return
     
     if not pygame.display.get_surface():

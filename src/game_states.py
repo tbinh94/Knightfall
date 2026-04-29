@@ -173,8 +173,13 @@ class PlayingState(GameState):
         self.cursor_x += segment["length"]
         
     def _create_obstacle_sprite(self, ob_data):
-        sprite_type = ob_data.sprite_type
+        kind = getattr(ob_data, 'kind', ob_data.get('kind') if isinstance(ob_data, dict) else None)
+        if kind == 'real':
+            sprite_type = 'dark_knight'
+        else:
+            sprite_type = ob_data.sprite_type if hasattr(ob_data, 'sprite_type') else ob_data.get('sprite_type', None)
         if not sprite_type:
+            sprite_type = stype
             if ob_data.kind == 'real' and LOADED_ENEMIES: 
                 sprite_type = get_random_enemy()
             elif ob_data.kind in ['fake', 'decor'] and LOADED_DECOYS: 

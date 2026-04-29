@@ -1,8 +1,11 @@
 {
   "dark_knight": {
-    "scale": 1.0,
+    "cols": 5,
+    "rows": 3,
+    "scale": 0.25,
     "y_offset": 0,
-    "animation_speed": 150
+    "animation_speed": 150,
+    "union_crop": true
   },
   "corrupted_guard": {
     "scale": 0.5,
