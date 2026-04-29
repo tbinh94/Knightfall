@@ -14,6 +14,13 @@ Game parkour với theme dark fantasy, nhân vật là hiệp sĩ phải vượt
 
 ---
 
+Demo:
+<img width="1519" height="892" alt="image" src="https://github.com/user-attachments/assets/3a39623b-5de9-4a93-99c8-63bd976697ba" />
+https://github.com/user-attachments/assets/c9ba2926-7a9d-4bcc-b7d9-7f8f3aa56a10
+
+
+
+
 ## 🚀 Cài đặt
 
 ### Requirements:
