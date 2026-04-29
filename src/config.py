@@ -83,10 +83,10 @@ STOMP_BOUNCE_V = -8.0 * SCALE_UNIFORM
 # ============================================
 # ROLL SETTINGS (Scaled)
 # ============================================
-ROLL_SPEED = 8.0 * SCALE_UNIFORM
-ROLL_DURATION = 400 # ms
+ROLL_SPEED = 12.0 * SCALE_UNIFORM
+ROLL_DURATION = 500 # ms
 ROLL_COOLDOWN = 600 # ms
-ROLL_INVINCIBILITY_DURATION = 350 # ms
+ROLL_INVINCIBILITY_DURATION = 500 # ms
 
 # ============================================
 # CAMERA SETTINGS (Scaled)

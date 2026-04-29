@@ -75,7 +75,7 @@ class LevelManager:
         
         discovered_levels.sort(key=lambda x: x["order"])
         
-        print(f"✓ Discovered {len(discovered_levels)} regular levels and {len(special_modes)} special modes.")
+        print(f"[OK] Discovered {len(discovered_levels)} regular levels and {len(special_modes)} special modes.")
         return discovered_levels, special_modes
 
     def load_progress(self):
@@ -100,7 +100,7 @@ class LevelManager:
         if filename not in self.completed_levels:
             self.completed_levels.add(filename)
             self.save_progress()
-            print(f"✓ Progress saved: {filename}")
+            print(f"[OK] Progress saved: {filename}")
 
     def get_difficulty_color(self, difficulty):
         """Trả về màu dựa trên độ khó"""

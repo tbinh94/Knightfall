@@ -251,8 +251,23 @@ class PlayingState(GameState):
         if stomp_hitbox:
             for obs in self.real_obstacles:
                 if stomp_hitbox.colliderect(obs.rect):
-                    self.game.player_stats.gold += 15
-                    obs.kill()
+                    if hasattr(obs, 'hp'):
+                        if not hasattr(self.player, 'hit_enemies'):
+                            self.player.hit_enemies = set()
+                        if obs not in self.player.hit_enemies:
+                            self.player.hit_enemies.add(obs)
+                            damage = 10 + getattr(self.game.player_stats, 'atk_bonus', 0)
+                            obs.hp -= damage
+                            if obs.hp <= 0:
+                                obs.kill()
+                                self.game.player_stats.gold += 50
+                            else:
+                                if hasattr(obs, 'change_state'):
+                                    obs.change_state("hit")
+                                    obs.stun_timer = 1.0
+                    else:
+                        self.game.player_stats.gold += 15
+                        obs.kill()
                     self.player.vy = STOMP_BOUNCE_V
                     self.player.is_stomping = False
                     self.player.stomp_phase = None
@@ -315,50 +330,59 @@ class PlayingState(GameState):
         
         real_collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, False, collided=collide_player_hitbox)
         if real_collisions and self.player.state != 'death':
-            obs = real_collisions[0]
-            
-            # Check for player invincibility
-            is_invincible = False
-            if self.player.is_rolling and self.player.roll_timer > (ROLL_DURATION - ROLL_INVINCIBILITY_DURATION):
-                is_invincible = True
-            if hasattr(self.player, 'invincible_timer') and self.player.invincible_timer > 0:
-                is_invincible = True
+            player_took_damage = False
+            for obs in real_collisions:
+                # Check for player invincibility
+                is_invincible = False
+                if self.player.is_rolling:
+                    is_invincible = True
+                if hasattr(self.player, 'invincible_timer') and self.player.invincible_timer > 0:
+                    is_invincible = True
 
-            if self.player.is_attacking or (self.player.is_stomping and self.player.stomp_phase == 'dive'):
-                if hasattr(obs, 'hp'):
-                    if not hasattr(self.player, 'hit_enemies'):
-                        self.player.hit_enemies = set()
-                    
-                    if obs not in self.player.hit_enemies:
-                        self.player.hit_enemies.add(obs)
-                        damage = 20 + getattr(self.game.player_stats, 'atk_bonus', 0)
-                        obs.hp -= damage  # Player attack damage (buffed from 10)
-                        if obs.hp <= 0:
-                            obs.kill()
-                            self.game.player_stats.gold += 50
+                if self.player.is_attacking or (self.player.is_stomping and self.player.stomp_phase == 'dive'):
+                    if hasattr(obs, 'hp'):
+                        if not hasattr(self.player, 'hit_enemies'):
+                            self.player.hit_enemies = set()
+                        
+                        if obs not in self.player.hit_enemies:
+                            self.player.hit_enemies.add(obs)
+                            if self.player.is_stomping:
+                                damage = 10 + getattr(self.game.player_stats, 'atk_bonus', 0)
+                            else:
+                                damage = 20 + getattr(self.game.player_stats, 'atk_bonus', 0)
+                            obs.hp -= damage  # Player attack damage
+                            if obs.hp <= 0:
+                                obs.kill()
+                                self.game.player_stats.gold += 50
+                            else:
+                                if hasattr(obs, 'change_state'):
+                                    obs.change_state("hit")
+                                    obs.stun_timer = 1.0
+                    else:
+                        self.game.player_stats.gold += 10
+                        obs.kill()
                 else:
-                    self.game.player_stats.gold += 10
-                    obs.kill()
-            else:
-                if not is_invincible:
-                    # Player takes damage from enemy collision
-                    if hasattr(obs, 'hp') and obs.hp > 0:
-                        self.game.player_stats.hp -= 10  # Enemy damage (reduced from 15)
-                        self.player.invincible_timer = 800  # 0.8s invincible
-                    else:
-                        self.game.player_stats.hp -= 10  # Trap damage
-                        self.player.invincible_timer = 800
+                    if not is_invincible and not player_took_damage:
+                        player_took_damage = True
+                        # Player takes damage from enemy collision
+                        if hasattr(obs, 'hp') and obs.hp > 0:
+                            self.game.player_stats.hp -= 10  # Enemy damage (reduced from 15)
+                            self.player.invincible_timer = 800  # 0.8s invincible
+                        else:
+                            self.game.player_stats.hp -= 10  # Trap damage
+                            self.player.invincible_timer = 800
 
-                    if self.game.player_stats.hp <= 0:
-                        self.player.state = 'death'
-                        self.player.current_frame = 0
-                        self.player.vx = 0
-                        self.game.player_stats.hp = 0
-                    else:
-                        # Optional knockback on taking damage
-                        self.player.vx = -5 if self.player.facing_right else 5
-                        self.player.vy = -3
-                        self.player.on_ground = False
+                        if self.game.player_stats.hp <= 0:
+                            self.player.state = 'death'
+                            self.player.current_frame = 0
+                            self.player.vx = 0
+                            self.game.player_stats.hp = 0
+                            break
+                        else:
+                            # Optional knockback on taking damage
+                            self.player.vx = -5 if self.player.facing_right else 5
+                            self.player.vy = -3
+                            self.player.on_ground = False
             return
 
 

@@ -63,6 +63,7 @@ class Enemy(pygame.sprite.Sprite):
         # FIX: store y_offset so update_rect can use it for correct ground alignment
         self.y_offset = y_offset
         self.attack_range = config.get('attack_range', 40)
+        self.stun_timer = 0.0
         
         self.animations = {}
         if isinstance(frames_data, dict):
@@ -86,12 +87,19 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.y += self.y_offset
 
     def change_state(self, new_state):
-        if new_state in self.animations and self.state != new_state:
-            self.state = new_state
-            self.animations[self.state].reset()
+        if self.state != new_state:
+            if new_state in self.animations:
+                self.state = new_state
+                self.animations[self.state].reset()
+            elif new_state == "hit":
+                self.state = "hit"
 
     def update(self, world_x_offset, dt, player_pos=None):
         """dt: delta time in seconds"""
+        if self.state == "hit":
+            if hasattr(self, 'stun_timer'):
+                self.stun_timer -= dt
+
         self.update_ai(player_pos, world_x_offset)
         
         if self.state in self.animations:
@@ -103,6 +111,14 @@ class Enemy(pygame.sprite.Sprite):
                 self.image = pygame.transform.flip(frame, True, False)
             else:
                 self.image = frame
+                
+        # --- RED TINT EFFECT FOR HIT STATE ---
+        if self.state == "hit" and hasattr(self, 'image') and self.image:
+            tinted_image = self.image.copy()
+            red_surf = pygame.Surface(tinted_image.get_size(), pygame.SRCALPHA)
+            red_surf.fill((255, 100, 100, 255))
+            tinted_image.blit(red_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            self.image = tinted_image
         
         self.world_pos += self.velocity * dt * 60
         self.update_rect(world_x_offset)
@@ -157,7 +173,9 @@ class Enemy(pygame.sprite.Sprite):
                 self.change_state("idle")
         
         elif self.state == "hit":
-            pass
+            self.velocity.x = 0
+            if hasattr(self, 'stun_timer') and self.stun_timer <= 0:
+                self.change_state("idle")
 
     def move_towards_player(self, player_world_x):
         if player_world_x > self.world_pos.x:
@@ -192,7 +210,7 @@ def detect_sprite_frames(image_path):
         width, height = img.size
         pixels = img.load()
 
-        if width > height * 1.5:
+        if width > height * 1.5 and width // height >= 2:
             frame_height = height
             frame_width = height
             num_frames = width // frame_width
@@ -325,9 +343,85 @@ def load_enemies():
     if not os.path.exists(enemies_dir):
         os.makedirs(enemies_dir)
         return
+        
+    if not pygame.display.get_surface():
+        pygame.display.set_mode((1, 1), pygame.NOFRAME | pygame.HIDDEN)
     
+    enemy_folders = [f for f in os.listdir(enemies_dir) if os.path.isdir(os.path.join(enemies_dir, f))]
+    for folder in enemy_folders:
+        folder_path = os.path.join(enemies_dir, folder)
+        enemy_name = folder
+        print(f"\n  -> Loading enemy folder: '{enemy_name}'")
+        
+        frames_by_state = {}
+        all_frames_loaded = []
+        
+        state_map = {
+            "idle": ["idle.png", "Idle.png"],
+            "run": ["walk.png", "run.png", "Walk.png", "Run.png"],
+            "attack": ["attack.png", "Attack.png"]
+        }
+        
+        for state, file_options in state_map.items():
+            for filename in file_options:
+                filepath = os.path.join(folder_path, filename)
+                if os.path.exists(filepath):
+                    num_frames, frame_width, frame_height, sheet_type, extra = detect_sprite_frames(filepath)
+                    spritesheet = pygame.image.load(filepath).convert_alpha()
+                    spritesheet = remove_checkerboard(spritesheet)
+                    
+                    state_frames = []
+                    for i in range(num_frames):
+                        if sheet_type == "horizontal":
+                            x_pos, y_pos = i * frame_width, 0
+                        elif sheet_type == "vertical":
+                            x_pos, y_pos = 0, i * frame_height
+                        elif sheet_type == "grid":
+                            cols = extra.get("cols", 4)
+                            x_pos, y_pos = (i % cols) * frame_width, (i // cols) * frame_height
+                        else:
+                            x_pos, y_pos = 0, 0
+                        
+                        if x_pos + frame_width > spritesheet.get_width() or \
+                           y_pos + frame_height > spritesheet.get_height():
+                            break
+                        
+                        rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
+                        frame = spritesheet.subsurface(rect).copy()
+                        state_frames.append(frame)
+                    
+                    if state_frames:
+                        scale_factor = get_enemy_config(enemy_name).get('scale', 0.5)
+                        scaled_state_frames = []
+                        for f in state_frames:
+                            new_w = int(f.get_width() * scale_factor)
+                            new_h = int(f.get_height() * scale_factor)
+                            scaled_state_frames.append(pygame.transform.scale(f, (new_w, new_h)))
+                        
+                        frames_by_state[state] = scaled_state_frames
+                        all_frames_loaded.extend(scaled_state_frames)
+                        break
+                        
+        if frames_by_state:
+            if "idle" not in frames_by_state and all_frames_loaded:
+                frames_by_state["idle"] = all_frames_loaded
+            if "run" not in frames_by_state:
+                frames_by_state["run"] = frames_by_state.get("idle", all_frames_loaded)
+            if "attack" not in frames_by_state:
+                frames_by_state["attack"] = frames_by_state.get("run", all_frames_loaded)
+                
+            LOADED_ENEMIES[enemy_name] = {
+                'frames_data': frames_by_state,
+                'frame_width': all_frames_loaded[0].get_width() if all_frames_loaded else 32,
+                'frame_height': all_frames_loaded[0].get_height() if all_frames_loaded else 32,
+                'num_frames': len(all_frames_loaded),
+                'animation_speed': 150,
+                'auto_y_offset': 0
+            }
+            print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())}")
+
     enemy_files = [f for f in os.listdir(enemies_dir) if f.endswith('.png')]
-    if not enemy_files: return
+    if not enemy_files and not enemy_folders: return
     
     if not pygame.display.get_surface():
         pygame.display.set_mode((1, 1))

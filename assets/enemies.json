@@ -1,4 +1,21 @@
 {
+  "dark_knight": {
+    "scale": 1.0,
+    "y_offset": 0,
+    "animation_speed": 150
+  },
+  "corrupted_guard": {
+    "scale": 0.5,
+    "y_offset": 0,
+    "animation_speed": 150,
+    "cols": 8,
+    "rows": 4,
+    "states": {
+      "idle": {"row": 0, "frames": 8},
+      "run": {"row": 1, "frames": 8},
+      "attack": {"row": 2, "frames": 8}
+    }
+  },
   "skeleton": {
     "scale": 1.2,
     "y_offset": 0,

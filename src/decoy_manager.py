@@ -111,7 +111,8 @@ DECOY_CONFIGS = {
     'pillar': {'scale': 0.3, 'use_static_frame': True},
     'wall': {'scale': 0.4, 'use_static_frame': True, 'y_offset': 28},
     'warrior': {'scale': 2.4, 'use_static_frame': True},
-    'column': {'scale': 1.0, 'use_static_frame': True, 'y_offset': 0}
+    'column': {'scale': 1.0, 'use_static_frame': True, 'y_offset': 0},
+    'lore_popup': {'scale': 1.0, 'use_static_frame': True, 'y_offset': 0}
 }
 
 def get_decoy_config(decoy_name):
