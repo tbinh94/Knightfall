@@ -382,7 +382,31 @@ def load_enemies():
                     spritesheet = remove_checkerboard(spritesheet)
                     
                     config = get_enemy_config(enemy_name)
-                    if 'cols' in config and 'rows' in config:
+                    if config.get('ai_generated', False):
+                        sheet_type = "ai_segments"
+                        width, height = spritesheet.get_size()
+                        alpha_arr = pygame.surfarray.array_alpha(spritesheet)
+                        has_pixel = []
+                        for x in range(width):
+                            col_has_pixel = False
+                            for y in range(0, height, 5):
+                                if alpha_arr[x, y] > 10: col_has_pixel = True; break
+                            has_pixel.append(col_has_pixel)
+
+                        segs = []
+                        start = -1
+                        for x in range(width):
+                            if has_pixel[x] and start == -1: start = x
+                            elif not has_pixel[x] and start != -1: 
+                                if (x - 1) - start > 10: segs.append((start, x-1))
+                                start = -1
+                        if start != -1 and (width - 1) - start > 10: segs.append((start, width-1))
+
+                        num_frames = len(segs)
+                        extra = {"segments": segs}
+                        frame_width = 0
+                        frame_height = height
+                    elif 'cols' in config and 'rows' in config:
                         num_cols, num_rows = config['cols'], config['rows']
                         frame_width = spritesheet.get_width() // num_cols
                         frame_height = spritesheet.get_height() // num_rows
@@ -402,19 +426,27 @@ def load_enemies():
                     for i in range(num_frames):
                         if sheet_type == "horizontal":
                             x_pos, y_pos = i * frame_width, 0
+                            rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
                         elif sheet_type == "vertical":
                             x_pos, y_pos = 0, i * frame_height
+                            rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
                         elif sheet_type == "grid":
                             cols = extra.get("cols", 4)
                             x_pos, y_pos = (i % cols) * frame_width, (i // cols) * frame_height
+                            rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
+                        elif sheet_type == "ai_segments":
+                            x_pos, end_x = extra["segments"][i]
+                            y_pos = 0
+                            rect = pygame.Rect(x_pos, y_pos, end_x - x_pos + 1, spritesheet.get_height())
                         else:
                             x_pos, y_pos = 0, 0
+                            rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
                         
-                        if x_pos + frame_width > spritesheet.get_width() or \
-                           y_pos + frame_height > spritesheet.get_height():
-                            break
+                        if sheet_type != "ai_segments":
+                            if x_pos + frame_width > spritesheet.get_width() or \
+                               y_pos + frame_height > spritesheet.get_height():
+                                break
                         
-                        rect = pygame.Rect(x_pos, y_pos, frame_width, frame_height)
                         frame = spritesheet.subsurface(rect).copy()
                         state_frames.append(frame)
                     

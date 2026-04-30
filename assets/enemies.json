@@ -1,15 +1,13 @@
 {
   "dark_knight": {
-    "cols": 5,
-    "rows": 3,
+    "ai_generated": true,
     "scale": 0.25,
     "y_offset": 0,
     "animation_speed": 150,
     "union_crop": true
   },
   "undead_soldier": {
-    "cols": 5,
-    "rows": 3,
+    "ai_generated": true,
     "scale": 0.25,
     "y_offset": 0,
     "animation_speed": 150,
