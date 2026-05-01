@@ -75,8 +75,10 @@ class PlayingState(GameState):
         self.level_phase = 1
 
     def enter_state(self):
-        pygame.mouse.set_visible(True)
+        pygame.mouse.set_visible(False)
         self.all_sprites.empty()
+
+
         self.real_obstacles.empty()
         self.fake_obstacles.empty()
         
@@ -331,6 +333,7 @@ class PlayingState(GameState):
                         sprite.update(self.world_x_offset, delta_time, player_pos=self.player.hitbox)
                 else:
                     sprite.update(self.world_x_offset, delta_time)
+
 
         
         real_collisions = pygame.sprite.spritecollide(self.player, self.real_obstacles, False, collided=collide_player_hitbox)

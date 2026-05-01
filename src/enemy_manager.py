@@ -88,6 +88,8 @@ class Enemy(pygame.sprite.Sprite):
 
         self.rect.y += self.y_offset
 
+
+
     def change_state(self, new_state):
         if self.state != new_state:
             if new_state in self.animations:
@@ -374,6 +376,34 @@ def load_enemies():
             "attack": ["attack.png", "Attack.png"]
         }
         
+        # --- Detect walk segments first (most reliable source) ---
+        shared_segments = None
+        config = get_enemy_config(enemy_name)
+        if config.get('ai_generated', False):
+            for filename in state_map["run"]:
+                filepath = os.path.join(folder_path, filename)
+                if os.path.exists(filepath):
+                    _ss = pygame.image.load(filepath).convert_alpha()
+                    _ss = remove_checkerboard(_ss)
+                    _w, _h = _ss.get_size()
+                    _alpha = pygame.surfarray.array_alpha(_ss)
+                    _has_px = []
+                    for x in range(_w):
+                        _col = False
+                        for y in range(0, _h, 5):
+                            if _alpha[x, y] > 10: _col = True; break
+                        _has_px.append(_col)
+                    _segs = []
+                    _start = -1
+                    for x in range(_w):
+                        if _has_px[x] and _start == -1: _start = x
+                        elif not _has_px[x] and _start != -1:
+                            if (x - 1) - _start > 10: _segs.append((_start, x - 1))
+                            _start = -1
+                    if _start != -1 and (_w - 1) - _start > 10: _segs.append((_start, _w - 1))
+                    shared_segments = _segs
+                    break
+
         for state, file_options in state_map.items():
             for filename in file_options:
                 filepath = os.path.join(folder_path, filename)
@@ -385,22 +415,36 @@ def load_enemies():
                     if config.get('ai_generated', False):
                         sheet_type = "ai_segments"
                         width, height = spritesheet.get_size()
-                        alpha_arr = pygame.surfarray.array_alpha(spritesheet)
-                        has_pixel = []
-                        for x in range(width):
-                            col_has_pixel = False
-                            for y in range(0, height, 5):
-                                if alpha_arr[x, y] > 10: col_has_pixel = True; break
-                            has_pixel.append(col_has_pixel)
 
-                        segs = []
-                        start = -1
-                        for x in range(width):
-                            if has_pixel[x] and start == -1: start = x
-                            elif not has_pixel[x] and start != -1: 
-                                if (x - 1) - start > 10: segs.append((start, x-1))
-                                start = -1
-                        if start != -1 and (width - 1) - start > 10: segs.append((start, width-1))
+                        if state == "run" and shared_segments:
+                            # Walk uses alpha-detected segments (most reliable)
+                            segs = shared_segments
+                        elif shared_segments:
+                            # Idle/Attack: equal-width split by walk frame count.
+                            # Sword-smear during attack merges frames in alpha detection,
+                            # so equal-width avoids that bug.
+                            num_walk_frames = len(shared_segments)
+                            frame_w_equal = width // num_walk_frames
+                            segs = [(i * frame_w_equal, (i + 1) * frame_w_equal - 1)
+                                    for i in range(num_walk_frames)]
+                        else:
+                            # Fallback: alpha detection on current file
+                            _alpha = pygame.surfarray.array_alpha(spritesheet)
+                            _has_px = []
+                            for x in range(width):
+                                _col = False
+                                for y in range(0, height, 5):
+                                    if _alpha[x, y] > 10: _col = True; break
+                                _has_px.append(_col)
+                            segs = []
+                            _start = -1
+                            for x in range(width):
+                                if _has_px[x] and _start == -1: _start = x
+                                elif not _has_px[x] and _start != -1:
+                                    if (x - 1) - _start > 10: segs.append((_start, x - 1))
+                                    _start = -1
+                            if _start != -1 and (width - 1) - _start > 10:
+                                segs.append((_start, width - 1))
 
                         num_frames = len(segs)
                         extra = {"segments": segs}
@@ -451,24 +495,24 @@ def load_enemies():
                         state_frames.append(frame)
                     
                     if state_frames:
-                        # Per-frame tight bounding-box crop
-                        cropped_frames = []
-                        for f in state_frames:
-                            alpha_arr = pygame.surfarray.array_alpha(f)
-                            # Find bounding box of content (alpha > 10)
-                            non_zero = np.where(alpha_arr > 10)
-                            if len(non_zero[0]) > 0 and len(non_zero[1]) > 0:
-                                min_x, max_x = np.min(non_zero[0]), np.max(non_zero[0])
-                                min_y, max_y = np.min(non_zero[1]), np.max(non_zero[1])
-                                
-                                # Crop frame directly to character bounds
-                                char_rect = pygame.Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
-                                char_surf = f.subsurface(char_rect).copy()
-                                cropped_frames.append(char_surf)
-                            else:
-                                # Frame is essentially blank, keep it empty
-                                cropped_frames.append(f)
-                        state_frames = cropped_frames
+                        if config.get('ai_generated', False):
+                            # DO NOT crop here! We will do a GLOBAL union crop across all states
+                            # after loading all states to prevent vertical and horizontal jitter.
+                            pass
+                        else:
+                            # Non-AI sprites: per-frame tight bounding-box crop
+                            cropped_frames = []
+                            for f in state_frames:
+                                alpha_arr = pygame.surfarray.array_alpha(f)
+                                non_zero = np.where(alpha_arr > 10)
+                                if len(non_zero[0]) > 0 and len(non_zero[1]) > 0:
+                                    min_x, max_x = np.min(non_zero[0]), np.max(non_zero[0])
+                                    min_y, max_y = np.min(non_zero[1]), np.max(non_zero[1])
+                                    char_rect = pygame.Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+                                    cropped_frames.append(f.subsurface(char_rect).copy())
+                                else:
+                                    cropped_frames.append(f)
+                            state_frames = cropped_frames
 
                         scale_factor = get_enemy_config(enemy_name).get('scale', 0.5)
                         scaled_state_frames = []
@@ -489,22 +533,67 @@ def load_enemies():
             if "attack" not in frames_by_state:
                 frames_by_state["attack"] = frames_by_state.get("run", all_frames_loaded)
 
-            # --- FIX JITTER: Normalize all frames to same canvas size, anchored at bottom ---
-            max_w = max(f.get_width() for frames in frames_by_state.values() for f in frames)
-            max_h = max(f.get_height() for frames in frames_by_state.values() for f in frames)
-
-            normalized_by_state = {}
-            for st, frames in frames_by_state.items():
-                norm_frames = []
-                for f in frames:
-                    canvas = pygame.Surface((max_w, max_h), pygame.SRCALPHA)
-                    dst_x = (max_w - f.get_width()) // 2
-                    dst_y = max_h - f.get_height()  # anchor to bottom
-                    canvas.blit(f, (dst_x, dst_y))
-                    norm_frames.append(canvas)
-                normalized_by_state[st] = norm_frames
-            frames_by_state = normalized_by_state
+            config = get_enemy_config(enemy_name)
+            if config.get('ai_generated', False):
+                # --- GLOBAL UNION BOUNDING BOX CROP (Fix Jitter completely) ---
+                all_min_x, all_max_x, all_min_y, all_max_y = [], [], [], []
+                for frames in frames_by_state.values():
+                    for f in frames:
+                        _a = pygame.surfarray.array_alpha(f)
+                        nz = np.where(_a > 10)
+                        if len(nz[0]) > 0 and len(nz[1]) > 0:
+                            all_min_x.append(int(np.min(nz[0])))
+                            all_max_x.append(int(np.max(nz[0])))
+                            all_min_y.append(int(np.min(nz[1])))
+                            all_max_y.append(int(np.max(nz[1])))
                 
+                if all_min_x:
+                    # 1. Global Width and Top Reference
+                    ux0, ux1 = min(all_min_x), max(all_max_x)
+                    uy0 = min(all_min_y)
+                    uw = ux1 - ux0 + 1
+                    
+                    # 2. Find Ground Reference from 'run' animation
+                    run_frames = frames_by_state.get('run', [])
+                    ref_uy1 = max(all_max_y) # fallback
+                    if run_frames:
+                        run_max_ys = []
+                        for f in run_frames:
+                            _a = pygame.surfarray.array_alpha(f)
+                            nz = np.where(_a > 10)
+                            if len(nz[1]) > 0:
+                                run_max_ys.append(int(np.max(nz[1])))
+                        if run_max_ys:
+                            ref_uy1 = max(run_max_ys)
+                    
+                    # 3. Final Canvas Height is determined by top to ref_ground
+                    uh = ref_uy1 - uy0 + 1
+
+                    cropped_by_state = {}
+                    for st, frames in frames_by_state.items():
+                        cframes = []
+                        for f in frames:
+                            fw, fh = f.get_size()
+                            cx = max(0, min(ux0, fw - 1))
+                            cy = max(0, min(uy0, fh - 1))
+                            cw = max(1, min(uw, fw - cx))
+                            # Clip everything below ground reference
+                            ch = max(1, min(uh, fh - cy))
+                            
+                            # Create a constant size canvas (uw x uh)
+                            # All frames blitted at (0,0) to keep heads aligned to uy0
+                            # and ground aligned to uh.
+                            canvas = pygame.Surface((uw, uh), pygame.SRCALPHA)
+                            sub = f.subsurface(pygame.Rect(cx, cy, cw, ch))
+                            canvas.blit(sub, (0, 0))
+                            cframes.append(canvas)
+                        cropped_by_state[st] = cframes
+                    frames_by_state = cropped_by_state
+
+            max_w = uw
+            max_h = uh
+
+
             LOADED_ENEMIES[enemy_name] = {
                 'frames_data': frames_by_state,
                 'frame_width': max_w,
@@ -514,6 +603,8 @@ def load_enemies():
                 'auto_y_offset': 0
             }
             print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas)")
+
+
 
     enemy_files = [f for f in os.listdir(enemies_dir) if f.endswith('.png')]
     if not enemy_files and not enemy_folders: return
