@@ -547,52 +547,53 @@ def load_enemies():
                             all_min_y.append(int(np.min(nz[1])))
                             all_max_y.append(int(np.max(nz[1])))
                 
-                if all_min_x:
-                    # 1. Global Width and Top Reference
-                    ux0, ux1 = min(all_min_x), max(all_max_x)
-                    uy0 = min(all_min_y)
-                    uw = ux1 - ux0 + 1
+                if frames_by_state:
+                    # 1. Tight-crop every single frame individually first
+                    tight_frames_by_state = {}
+                    all_max_w = 0
+                    all_max_h = 0
                     
-                    # 2. Find Ground Reference from 'run' animation
-                    run_frames = frames_by_state.get('run', [])
-                    ref_uy1 = max(all_max_y) # fallback
-                    if run_frames:
-                        run_max_ys = []
-                        for f in run_frames:
+                    for st, frames in frames_by_state.items():
+                        tframes = []
+                        for f in frames:
                             _a = pygame.surfarray.array_alpha(f)
                             nz = np.where(_a > 10)
-                            if len(nz[1]) > 0:
-                                run_max_ys.append(int(np.max(nz[1])))
-                        if run_max_ys:
-                            ref_uy1 = max(run_max_ys)
+                            if len(nz[0]) > 0 and len(nz[1]) > 0:
+                                tx0, tx1 = int(np.min(nz[0])), int(np.max(nz[0]))
+                                ty0, ty1 = int(np.min(nz[1])), int(np.max(nz[1]))
+                                
+                                # Crop to this tight box
+                                tw, th = tx1 - tx0 + 1, ty1 - ty0 + 1
+                                sub = f.subsurface(pygame.Rect(tx0, ty0, tw, th)).copy()
+                                tframes.append(sub)
+                                
+                                all_max_w = max(all_max_w, tw)
+                                all_max_h = max(all_max_h, th)
+                            else:
+                                # Empty frame fallback
+                                tframes.append(f)
+                        tight_frames_by_state[st] = tframes
                     
-                    # 3. Final Canvas Height is determined by top to ref_ground
-                    uh = ref_uy1 - uy0 + 1
-
-                    cropped_by_state = {}
-                    for st, frames in frames_by_state.items():
-                        cframes = []
-                        for f in frames:
-                            fw, fh = f.get_size()
-                            cx = max(0, min(ux0, fw - 1))
-                            cy = max(0, min(uy0, fh - 1))
-                            cw = max(1, min(uw, fw - cx))
-                            # Clip everything below ground reference
-                            ch = max(1, min(uh, fh - cy))
-                            
-                            # Create a constant size canvas (uw x uh)
-                            # All frames blitted at (0,0) to keep heads aligned to uy0
-                            # and ground aligned to uh.
-                            canvas = pygame.Surface((uw, uh), pygame.SRCALPHA)
-                            sub = f.subsurface(pygame.Rect(cx, cy, cw, ch))
-                            canvas.blit(sub, (0, 0))
-                            cframes.append(canvas)
-                        cropped_by_state[st] = cframes
-                    frames_by_state = cropped_by_state
-
-            max_w = uw
-            max_h = uh
-
+                    # 2. Find a 'Run' ground line if possible to avoid floating
+                    # (Wait, if we tight crop everything, we anchor to bottom later)
+                    # But we need to keep vertical relationship if they are jumping.
+                    # For folder-based individual PNGs, it's safer to just center-bottom anchor.
+                    
+                    # 3. Normalize to common canvas
+                    norm_by_state = {}
+                    for st, tframes in tight_frames_by_state.items():
+                        nframes = []
+                        for f in tframes:
+                            canvas = pygame.Surface((all_max_w, all_max_h), pygame.SRCALPHA)
+                            # Center horizontally, anchor to bottom
+                            dx = (all_max_w - f.get_width()) // 2
+                            dy = (all_max_h - f.get_height()) 
+                            canvas.blit(f, (dx, dy))
+                            nframes.append(canvas)
+                        norm_by_state[st] = nframes
+                    
+                    frames_by_state = norm_by_state
+                    max_w, max_h = all_max_w, all_max_h
 
             LOADED_ENEMIES[enemy_name] = {
                 'frames_data': frames_by_state,
@@ -603,6 +604,7 @@ def load_enemies():
                 'auto_y_offset': 0
             }
             print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas)")
+
 
 
 
