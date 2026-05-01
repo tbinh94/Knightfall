@@ -332,7 +332,9 @@ class ObstacleSprite(Enemy):
 
         if sprite_data and self.kind == 'real':
             frames_data = sprite_data.get('frames_data', sprite_data.get('frames'))
-            y_offset = sprite_config.get('y_offset', 0) if sprite_config else 0
+            config_y_offset = sprite_config.get('y_offset', 0) if sprite_config else 0
+            auto_y_offset = sprite_data.get('auto_y_offset', 0) if sprite_data else 0
+            y_offset = config_y_offset + auto_y_offset
             super().__init__(world_x, y, self.sprite_type, frames_data, y_offset=y_offset)
             # Đã scale trong load_enemies(), không scale lại ở đây nữa
             self.world_pos.x += 15

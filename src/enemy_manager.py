@@ -45,12 +45,17 @@ class Animation:
 
 # --- ENEMY BASE CLASS ---
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, enemy_type, frames_data, y_offset=0):
+    def __init__(self, x, y, enemy_type, frames_data, y_offset=None):
         super().__init__()
         self.enemy_type = enemy_type
 
         config = get_enemy_config(enemy_type)
-        self.y_offset = config.get('y_offset', 0)
+        
+        # FIX: Use the y_offset passed in (which contains auto_y_offset), or fallback to config
+        if y_offset is not None:
+            self.y_offset = y_offset
+        else:
+            self.y_offset = config.get('y_offset', 0)
 
         self.state = "idle"
         self.velocity = pygame.math.Vector2(0, 0)
@@ -72,7 +77,10 @@ class Enemy(pygame.sprite.Sprite):
             for state, frames in frames_data.items():
                 speed = config.get('animation_speed', 150) / 1000.0
                 if state == "attack": speed = 0.1
-                self.animations[state] = Animation(frames, speed=speed)
+                
+                # Attack and Death animations should not loop endlessly
+                should_loop = state not in ["attack", "death"]
+                self.animations[state] = Animation(frames, speed=speed, loop=should_loop)
         else:
             speed = config.get('animation_speed', 150) / 1000.0
             self.animations["idle"] = Animation(frames_data, speed=speed)
@@ -150,15 +158,13 @@ class Enemy(pygame.sprite.Sprite):
         distance = abs(dist_x)
 
         if self.state == "idle":
-            # Patrol between left and right
-            if self.patrol_direction == 1 and self.world_pos.x >= self.patrol_right:
-                self.patrol_direction = -1
-            elif self.patrol_direction == -1 and self.world_pos.x <= self.patrol_left:
-                self.patrol_direction = 1
+            # Monster should stand still when idle
+            self.velocity.x = 0
             
-            self.velocity.x = self.patrol_direction * 2  # Patrol speed
-            self.direction = self.patrol_direction
-            
+            # Face the player if they are nearby (optional, makes it look better)
+            if distance < 400:
+                self.direction = 1 if player_world_x > self.world_pos.x else -1
+
             if distance < 250:
                 self.change_state("run")
         
@@ -416,35 +422,42 @@ def load_enemies():
                         sheet_type = "ai_segments"
                         width, height = spritesheet.get_size()
 
-                        if state == "run" and shared_segments:
-                            # Walk uses alpha-detected segments (most reliable)
-                            segs = shared_segments
-                        elif shared_segments:
-                            # Idle/Attack: equal-width split by walk frame count.
-                            # Sword-smear during attack merges frames in alpha detection,
-                            # so equal-width avoids that bug.
-                            num_walk_frames = len(shared_segments)
-                            frame_w_equal = width // num_walk_frames
-                            segs = [(i * frame_w_equal, (i + 1) * frame_w_equal - 1)
-                                    for i in range(num_walk_frames)]
-                        else:
-                            # Fallback: alpha detection on current file
-                            _alpha = pygame.surfarray.array_alpha(spritesheet)
-                            _has_px = []
-                            for x in range(width):
-                                _col = False
-                                for y in range(0, height, 5):
-                                    if _alpha[x, y] > 10: _col = True; break
-                                _has_px.append(_col)
+                        # Detect segments for THIS file
+                        _alpha = pygame.surfarray.array_alpha(spritesheet)
+                        _has_px = []
+                        for x in range(width):
+                            _col = False
+                            for y in range(0, height, 5):
+                                if _alpha[x, y] > 10: _col = True; break
+                            _has_px.append(_col)
+                        
+                        current_segs = []
+                        _start = -1
+                        for x in range(width):
+                            if _has_px[x] and _start == -1: _start = x
+                            elif not _has_px[x] and _start != -1:
+                                if (x - 1) - _start > 10: current_segs.append((_start, x - 1))
+                                _start = -1
+                        if _start != -1 and (width - 1) - _start > 10:
+                            current_segs.append((_start, width - 1))
+
+                        if state == "attack" and shared_segments:
+                            # Force split based on shared_segments (walk) midpoints because attack often has sword smears that merge frames
                             segs = []
-                            _start = -1
-                            for x in range(width):
-                                if _has_px[x] and _start == -1: _start = x
-                                elif not _has_px[x] and _start != -1:
-                                    if (x - 1) - _start > 10: segs.append((_start, x - 1))
-                                    _start = -1
-                            if _start != -1 and (width - 1) - _start > 10:
-                                segs.append((_start, width - 1))
+                            prev_end = 0
+                            for i in range(len(shared_segments) - 1):
+                                mid = (shared_segments[i][1] + shared_segments[i+1][0]) // 2
+                                segs.append((prev_end, mid))
+                                prev_end = mid + 1
+                            segs.append((prev_end, width - 1))
+                        elif len(current_segs) > 1:
+                            segs = current_segs
+                        elif shared_segments:
+                            # Fallback if current_segs failed entirely
+                            segs = shared_segments
+                        else:
+                            # Final fallback
+                            segs = [(0, width - 1)]
 
                         num_frames = len(segs)
                         extra = {"segments": segs}
@@ -536,74 +549,86 @@ def load_enemies():
             config = get_enemy_config(enemy_name)
             if config.get('ai_generated', False):
                 # --- GLOBAL UNION BOUNDING BOX CROP (Fix Jitter completely) ---
-                all_min_x, all_max_x, all_min_y, all_max_y = [], [], [], []
-                for frames in frames_by_state.values():
+                # 1. Find global bounds across all frames
+                global_min_x, global_min_y = float('inf'), float('inf')
+                global_max_x, global_max_y = 0, 0
+                valid_frames = False
+                
+                # We also want to find the feet Y, which is usually the lowest pixel of the run state
+                feet_y_run = []
+                feet_y_idle = []
+                
+                for st, frames in frames_by_state.items():
                     for f in frames:
                         _a = pygame.surfarray.array_alpha(f)
                         nz = np.where(_a > 10)
                         if len(nz[0]) > 0 and len(nz[1]) > 0:
-                            all_min_x.append(int(np.min(nz[0])))
-                            all_max_x.append(int(np.max(nz[0])))
-                            all_min_y.append(int(np.min(nz[1])))
-                            all_max_y.append(int(np.max(nz[1])))
-                
-                if frames_by_state:
-                    # 1. Tight-crop every single frame individually first
-                    tight_frames_by_state = {}
-                    all_max_w = 0
-                    all_max_h = 0
+                            valid_frames = True
+                            min_x, max_x = int(np.min(nz[0])), int(np.max(nz[0]))
+                            min_y, max_y = int(np.min(nz[1])), int(np.max(nz[1]))
+                            
+                            global_min_x = min(global_min_x, min_x)
+                            global_max_x = max(global_max_x, max_x)
+                            global_min_y = min(global_min_y, min_y)
+                            global_max_y = max(global_max_y, max_y)
+                            
+                            if st == 'run':
+                                feet_y_run.append(max_y)
+                            elif st == 'idle':
+                                feet_y_idle.append(max_y)
+
+                if valid_frames and frames_by_state:
+                    union_w = global_max_x - global_min_x + 1
+                    union_h = global_max_y - global_min_y + 1
                     
+                    norm_by_state = {}
                     for st, frames in frames_by_state.items():
-                        tframes = []
+                        nframes = []
                         for f in frames:
+                            # Instead of individual tight crop, crop using the global bounding box
+                            # But wait, different files might have different dimensions! 
+                            # To be safe, we just place the tightly cropped part at its original relative position
                             _a = pygame.surfarray.array_alpha(f)
                             nz = np.where(_a > 10)
+                            canvas = pygame.Surface((union_w, union_h), pygame.SRCALPHA)
                             if len(nz[0]) > 0 and len(nz[1]) > 0:
                                 tx0, tx1 = int(np.min(nz[0])), int(np.max(nz[0]))
                                 ty0, ty1 = int(np.min(nz[1])), int(np.max(nz[1]))
-                                
-                                # Crop to this tight box
                                 tw, th = tx1 - tx0 + 1, ty1 - ty0 + 1
                                 sub = f.subsurface(pygame.Rect(tx0, ty0, tw, th)).copy()
-                                tframes.append(sub)
                                 
-                                all_max_w = max(all_max_w, tw)
-                                all_max_h = max(all_max_h, th)
-                            else:
-                                # Empty frame fallback
-                                tframes.append(f)
-                        tight_frames_by_state[st] = tframes
-                    
-                    # 2. Find a 'Run' ground line if possible to avoid floating
-                    # (Wait, if we tight crop everything, we anchor to bottom later)
-                    # But we need to keep vertical relationship if they are jumping.
-                    # For folder-based individual PNGs, it's safer to just center-bottom anchor.
-                    
-                    # 3. Normalize to common canvas
-                    norm_by_state = {}
-                    for st, tframes in tight_frames_by_state.items():
-                        nframes = []
-                        for f in tframes:
-                            canvas = pygame.Surface((all_max_w, all_max_h), pygame.SRCALPHA)
-                            # Center horizontally, anchor to bottom
-                            dx = (all_max_w - f.get_width()) // 2
-                            dy = (all_max_h - f.get_height()) 
-                            canvas.blit(f, (dx, dy))
+                                # Place it exactly where it was relative to the global bounds
+                                dx = tx0 - global_min_x
+                                dy = ty0 - global_min_y
+                                canvas.blit(sub, (dx, dy))
                             nframes.append(canvas)
                         norm_by_state[st] = nframes
                     
                     frames_by_state = norm_by_state
-                    max_w, max_h = all_max_w, all_max_h
+                    max_w, max_h = union_w, union_h
+                    
+                    # Calculate auto_y_offset to keep feet on the ground
+                    if feet_y_run:
+                        feet_y = max(feet_y_run)
+                        auto_y_offset = global_max_y - feet_y
+                    elif feet_y_idle:
+                        feet_y = max(feet_y_idle)
+                        auto_y_offset = global_max_y - feet_y
+                    else:
+                        auto_y_offset = 0
+
+            else:
+                auto_y_offset = 0
 
             LOADED_ENEMIES[enemy_name] = {
                 'frames_data': frames_by_state,
-                'frame_width': max_w,
-                'frame_height': max_h,
+                'frame_width': frames_by_state[list(frames_by_state.keys())[0]][0].get_width(),
+                'frame_height': frames_by_state[list(frames_by_state.keys())[0]][0].get_height(),
                 'num_frames': sum(len(v) for v in frames_by_state.values()),
                 'animation_speed': 150,
-                'auto_y_offset': 0
+                'auto_y_offset': auto_y_offset if config.get('ai_generated', False) else 0
             }
-            print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas)")
+            print(f"     [OK] Loaded from folder -> states: {list(frames_by_state.keys())} ({max_w}x{max_h}px canvas, y_offset: {auto_y_offset})")
 
 
 

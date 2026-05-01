@@ -692,7 +692,14 @@ class PlayingState(GameState):
         bar_width = 40
         bar_height = 5
         bar_x = enemy.rect.centerx - bar_width // 2
-        bar_y = enemy.rect.top - 15
+        
+        bounding_rect = enemy.image.get_bounding_rect()
+        if bounding_rect.height > 0:
+            visual_top = enemy.rect.top + bounding_rect.top
+        else:
+            visual_top = enemy.rect.top
+            
+        bar_y = visual_top - 15
         
         # Background
         pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))

@@ -2,14 +2,14 @@
   "dark_knight": {
     "ai_generated": true,
     "scale": 0.25,
-    "y_offset": 0,
+    "y_offset": -15,
     "animation_speed": 150,
     "union_crop": true
   },
   "undead_soldier": {
     "ai_generated": true,
     "scale": 0.25,
-    "y_offset": 0,
+    "y_offset": -15,
     "animation_speed": 150,
     "union_crop": true
   },
@@ -20,9 +20,18 @@
     "cols": 8,
     "rows": 4,
     "states": {
-      "idle": {"row": 0, "frames": 8},
-      "run": {"row": 1, "frames": 8},
-      "attack": {"row": 2, "frames": 8}
+      "idle": {
+        "row": 0,
+        "frames": 8
+      },
+      "run": {
+        "row": 1,
+        "frames": 8
+      },
+      "attack": {
+        "row": 2,
+        "frames": 8
+      }
     }
   },
   "skeleton": {
@@ -30,9 +39,18 @@
     "y_offset": 0,
     "animation_speed": 100,
     "states": {
-      "idle": {"frames": 8, "speed": 100},
-      "run": {"frames": 8, "speed": 100},
-      "attack": {"frames": 4, "speed": 100}
+      "idle": {
+        "frames": 8,
+        "speed": 100
+      },
+      "run": {
+        "frames": 8,
+        "speed": 100
+      },
+      "attack": {
+        "frames": 4,
+        "speed": 100
+      }
     }
   },
   "dark_gargoyle": {
@@ -52,9 +70,18 @@
     "cols": 4,
     "rows": 3,
     "states": {
-      "idle": {"row": 0, "frames": 4},
-      "run": {"row": 1, "frames": 4},
-      "attack": {"row": 2, "frames": 4}
+      "idle": {
+        "row": 0,
+        "frames": 4
+      },
+      "run": {
+        "row": 1,
+        "frames": 4
+      },
+      "attack": {
+        "row": 2,
+        "frames": 4
+      }
     }
   },
   "rotten_bug": {
@@ -64,9 +91,18 @@
     "cols": 4,
     "rows": 2,
     "states": {
-      "idle": {"row": 0, "frames": 4},
-      "run": {"row": 0, "frames": 4},
-      "attack": {"row": 1, "frames": 4}
+      "idle": {
+        "row": 0,
+        "frames": 4
+      },
+      "run": {
+        "row": 0,
+        "frames": 4
+      },
+      "attack": {
+        "row": 1,
+        "frames": 4
+      }
     }
   },
   "flying_parasite": {
@@ -76,9 +112,18 @@
     "cols": 4,
     "rows": 2,
     "states": {
-      "idle": {"row": 0, "frames": 4},
-      "run": {"row": 0, "frames": 4},
-      "attack": {"row": 1, "frames": 4}
+      "idle": {
+        "row": 0,
+        "frames": 4
+      },
+      "run": {
+        "row": 0,
+        "frames": 4
+      },
+      "attack": {
+        "row": 1,
+        "frames": 4
+      }
     }
   },
   "forest_ghoul": {
@@ -88,9 +133,18 @@
     "cols": 4,
     "rows": 2,
     "states": {
-      "idle": {"row": 0, "frames": 4},
-      "run": {"row": 0, "frames": 4},
-      "attack": {"row": 1, "frames": 4}
+      "idle": {
+        "row": 0,
+        "frames": 4
+      },
+      "run": {
+        "row": 0,
+        "frames": 4
+      },
+      "attack": {
+        "row": 1,
+        "frames": 4
+      }
     }
   }
 }
