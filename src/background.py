@@ -47,17 +47,47 @@ class ForestBackground:
         ]
 
         for filename, speed in layer_configs:
-
             path = os.path.join(bg_dir, filename)
             if os.path.exists(path):
                 self.layers.append(ParallaxLayer(path, speed, SCREEN_H))
+        
+        # Load column asset as a prop
+        self.column_img = None
+        col_path = os.path.join(bg_dir, "column.png")
+        if os.path.exists(col_path):
+            self.column_img = pygame.image.load(col_path).convert_alpha()
+            # Scale to a reasonable size
+            cw, ch = self.column_img.get_size()
+            target_h = int(SCREEN_H * 0.7)
+            target_w = int(cw * (target_h / ch))
+            self.column_img = pygame.transform.scale(self.column_img, (target_w, target_h))
 
     def draw(self, screen, world_x_offset, level_length=None):
         if not self.layers:
             screen.fill((10, 20, 10))
             return
-        for layer in self.layers:
-            layer.draw(screen, world_x_offset)
+            
+        # Draw background layers up to Near trees 2
+        for i, layer in enumerate(self.layers):
+            if i < 10: # Draw up to Layer_0002_7 (Near trees 2)
+                layer.draw(screen, world_x_offset)
+        
+        # Draw columns between near layers for depth
+        if self.column_img:
+            col_spacing = 800
+            start_idx = int(world_x_offset // col_spacing)
+            num_cols = (SCREEN_W // col_spacing) + 2
+            for i in range(num_cols):
+                idx = start_idx + i
+                # Parallax speed for columns (same as near trees 1)
+                col_x = (idx * col_spacing) - (world_x_offset * 0.6)
+                if -200 < col_x < SCREEN_W + 200:
+                    screen.blit(self.column_img, (col_x, SCREEN_H - self.column_img.get_height() - 50))
+
+        # Draw remaining foreground layers
+        for i, layer in enumerate(self.layers):
+            if i >= 10:
+                layer.draw(screen, world_x_offset)
 
 class GothicBackground:
     def __init__(self, layer_configs=None):

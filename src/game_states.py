@@ -73,6 +73,7 @@ class PlayingState(GameState):
         self.boss_active = False
         self.boss_instance = None
         self.level_phase = 1
+        self.hit_stop_timer = 0.0  # Game freeze effect when hitting enemies
 
     def enter_state(self):
         pygame.mouse.set_visible(False)
@@ -175,39 +176,37 @@ class PlayingState(GameState):
         self.cursor_x += segment["length"]
         
     def _create_obstacle_sprite(self, ob_data):
-        kind = getattr(ob_data, 'kind', ob_data.get('kind') if isinstance(ob_data, dict) else None)
-        if kind == 'real':
-            sprite_type = 'dark_knight'
-        else:
-            sprite_type = ob_data.sprite_type if hasattr(ob_data, 'sprite_type') else ob_data.get('sprite_type', None)
+        # Determine kind (real, fake, or decor)
+        kind = getattr(ob_data, 'kind', ob_data.get('kind') if isinstance(ob_data, dict) else 'decor')
+        
+        # Determine sprite_type (the specific enemy/decoy name)
+        sprite_type = getattr(ob_data, 'sprite_type', ob_data.get('type') if isinstance(ob_data, dict) else None)
+
         if not sprite_type:
-            sprite_type = stype
-            if ob_data.kind == 'real' and LOADED_ENEMIES: 
-                sprite_type = get_random_enemy()
-            elif ob_data.kind in ['fake', 'decor'] and LOADED_DECOYS: 
-                if ob_data.kind == 'fake':
-                    lore_text = ob_data.get("text")
-                    if ob_data.x > 400:
+            if kind == 'real':
+                # Randomly choose between the requested monsters
+                sprite_type = random.choice(['undead_soldier', 'dark_knight'])
+            elif kind in ['fake', 'decor'] and LOADED_DECOYS:
+                if kind == 'fake':
+                    if hasattr(ob_data, 'x') and ob_data.x > 400:
                         rand_val = random.random()
-                        if rand_val < 0.20:
-                            sprite_type = 'pillar'
-                        elif rand_val < 0.40: 
-                            sprite_type = 'warrior'
-                        else:
-                            sprite_type = 'wall'
+                        if rand_val < 0.20: sprite_type = 'pillar'
+                        elif rand_val < 0.40: sprite_type = 'warrior'
+                        else: sprite_type = 'wall'
                     else:
                         sprite_type = 'wall'
                 else:
                     available = [k for k in LOADED_DECOYS.keys() if k not in ['pillar', 'warrior']]
-                    if available:
-                        sprite_type = random.choice(available)
-                    else:
-                        sprite_type = get_random_decoy()
+                    sprite_type = random.choice(available) if available else get_random_decoy()
+        
+        # Finally, ensure we have a valid sprite_type or fallback to a known default
+        if not sprite_type and kind == 'real':
+            sprite_type = 'undead_soldier'
                 
-        obstacle_sprite = ObstacleSprite(ob_data.x, ob_data.y, ob_data.kind, sprite_type=sprite_type, lore_text=ob_data.text)
-        if ob_data.kind == 'real': 
+        obstacle_sprite = ObstacleSprite(ob_data.x, ob_data.y, kind, sprite_type=sprite_type, lore_text=getattr(ob_data, 'text', None))
+        if kind == 'real': 
             self.real_obstacles.add(obstacle_sprite)
-        elif ob_data.kind == 'fake' or sprite_type in ['pillar', 'warrior']: 
+        elif kind == 'fake' or sprite_type in ['pillar', 'warrior']: 
             self.fake_obstacles.add(obstacle_sprite)
         self.all_sprites.add(obstacle_sprite)
         
@@ -245,9 +244,13 @@ class PlayingState(GameState):
             death_anim = self.player.animations['death']
             if self.player.current_frame >= len(death_anim['frames']) - 1:
                 pygame.time.delay(500)
-                self.game.flip_state("game_over")
             return
-            
+        
+        if self.hit_stop_timer > 0:
+            self.hit_stop_timer -= delta_time
+            # Return early to skip most logic, but still draw below
+            return
+
         self.current_run_speed = 0
         
         self.visible_platforms.clear()
@@ -275,6 +278,8 @@ class PlayingState(GameState):
                     else:
                         self.game.player_stats.gold += 15
                         obs.kill()
+                    
+                    self.hit_stop_timer = 0.1 # Hitstop for stomp
                     self.player.vy = STOMP_BOUNCE_V
                     self.player.is_stomping = False
                     self.player.stomp_phase = None
@@ -299,7 +304,7 @@ class PlayingState(GameState):
                         p.length = num_tiles_x * tile_size
 
                 x_on_screen = p.x - self.world_x_offset
-                if x_on_screen + p.length < -200 or x_on_screen > SCREEN_W + 200:
+                if x_on_screen + p.length < -SCREEN_W or x_on_screen > SCREEN_W * 2:
                     continue
                 
                 self.visible_platforms.append(p)
@@ -330,7 +335,7 @@ class PlayingState(GameState):
                     # Optimize: only update if close to screen to fix lag and unwanted patrol drifting
                     screen_x = sprite.world_pos.x - self.world_x_offset
                     if -SCREEN_W <= screen_x <= SCREEN_W * 2:
-                        sprite.update(self.world_x_offset, delta_time, player_pos=self.player.hitbox)
+                        sprite.update(self.world_x_offset, delta_time, player_pos=self.player.hitbox, platforms=self.visible_platforms)
                 else:
                     sprite.update(self.world_x_offset, delta_time)
 
@@ -358,14 +363,28 @@ class PlayingState(GameState):
                                 damage = 10 + getattr(self.game.player_stats, 'atk_bonus', 0)
                             else:
                                 damage = 20 + getattr(self.game.player_stats, 'atk_bonus', 0)
-                            obs.hp -= damage  # Player attack damage
-                            if obs.hp <= 0:
-                                obs.kill()
-                                self.game.player_stats.gold += 50
+                            
+                            # Calculate knockback direction (away from player)
+                            player_world_x = self.player.hitbox.centerx + self.world_x_offset
+                            kb_dir = 1 if player_world_x < obs.world_pos.x else -1
+                            
+                            if hasattr(obs, 'take_damage'):
+                                # Juggling logic: add vertical knockback
+                                vertical_kb = 3 if not obs.on_ground() else 1.5
+                                was_hit = obs.take_damage(damage, kb_dir, vertical_knockback=vertical_kb)
+                                if was_hit:
+                                    self.hit_stop_timer = 0.08 # Brief hitstop
+                                    if obs.hp <= 0:
+                                        self.game.player_stats.gold += 50
                             else:
-                                if hasattr(obs, 'change_state'):
-                                    obs.change_state("hit")
-                                    obs.stun_timer = 1.0
+                                obs.hp -= damage
+                                if obs.hp <= 0:
+                                    obs.kill()
+                                    self.game.player_stats.gold += 50
+                                else:
+                                    if hasattr(obs, 'change_state'):
+                                        obs.change_state("hit")
+                                        self.hit_stop_timer = 0.05
                     else:
                         self.game.player_stats.gold += 10
                         obs.kill()
@@ -401,6 +420,7 @@ class PlayingState(GameState):
                 self.player.current_frame = 0
                 self.player.vx = 0
                 self.game.player_stats.hp = 0
+            return
 
         self.interaction_prompt = None
         keys = pygame.key.get_pressed()

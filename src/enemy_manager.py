@@ -71,6 +71,10 @@ class Enemy(pygame.sprite.Sprite):
         self.y_offset = y_offset
         self.attack_range = config.get('attack_range', 40)
         self.stun_timer = 0.0
+        self.invincible_timer = 0.0 # Time after being hit when monster can't be hit again
+        self.knockback_velocity = pygame.math.Vector2(0, 0) # Vector for knockback
+        self.armor = config.get('armor', 0) # Armor reduces knockback and prevents hitstun
+        self.gravity = 0.8
         
         self.animations = {}
         if isinstance(frames_data, dict):
@@ -105,14 +109,54 @@ class Enemy(pygame.sprite.Sprite):
                 self.animations[self.state].reset()
             elif new_state == "hit":
                 self.state = "hit"
+            elif new_state == "death":
+                # If no death animation, just kill immediately
+                self.kill()
 
-    def update(self, world_x_offset, dt, player_pos=None):
+    def update(self, world_x_offset, dt, player_pos=None, platforms=None):
         """dt: delta time in seconds"""
         if self.state == "hit":
             if hasattr(self, 'stun_timer'):
                 self.stun_timer -= dt
+        
+        if self.invincible_timer > 0:
+            self.invincible_timer -= dt
 
-        self.update_ai(player_pos, world_x_offset)
+        # Apply knockback and physics
+        is_grounded = self.on_ground(platforms)
+        
+        if self.knockback_velocity.length() > 0.1:
+            self.velocity = self.knockback_velocity
+            # Friction/decay for knockback
+            self.knockback_velocity.x *= (1.0 - 10.0 * dt)
+            
+            # Apply gravity to vertical knockback
+            if not is_grounded:
+                self.knockback_velocity.y += self.gravity
+            else:
+                # If on ground, stop vertical velocity
+                if self.knockback_velocity.y > 0:
+                    self.knockback_velocity.y = 0
+                # If moving up while "grounded" (shouldn't happen but for safety), apply gravity
+                elif self.knockback_velocity.y < 0:
+                    self.knockback_velocity.y += self.gravity
+        elif self.state == "hit":
+            self.velocity.x = 0
+            if not is_grounded:
+                self.velocity.y += self.gravity
+            else:
+                self.velocity.y = 0
+        else:
+            # Normal gravity
+            if not is_grounded:
+                self.velocity.y += self.gravity
+            else:
+                self.velocity.y = 0
+                # Snap to ground Y (the on_ground method sets this if grounded)
+                if hasattr(self, '_ground_y'):
+                    self.world_pos.y = self._ground_y
+
+        self.update_ai(player_pos, world_x_offset, platforms=platforms)
         
         if self.state in self.animations:
             anim = self.animations[self.state]
@@ -134,19 +178,26 @@ class Enemy(pygame.sprite.Sprite):
                 self.rect = self.image.get_rect()
                 self.rect.midbottom = old_midbottom
                 
-        # --- RED TINT EFFECT FOR HIT STATE ---
+        # --- WHITE FLASH EFFECT FOR HIT STATE ---
         if self.state == "hit" and hasattr(self, 'image') and self.image:
-            tinted_image = self.image.copy()
-            red_surf = pygame.Surface(tinted_image.get_size(), pygame.SRCALPHA)
-            red_surf.fill((255, 100, 100, 255))
-            tinted_image.blit(red_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            self.image = tinted_image
+            # White flash effect: create a white version of the sprite
+            white_surf = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
+            white_surf.fill((255, 255, 255, 255))
+            flash_image = self.image.copy()
+            flash_image.blit(white_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            # Additive blend to make it bright white while keeping alpha
+            self.image.blit(flash_image, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        
+        if self.state == "death":
+            self.velocity.x = 0
+            if "death" in self.animations and self.animations["death"].done:
+                self.kill()
         
         self.world_pos += self.velocity * dt * 60
         self.update_rect(world_x_offset)
 
-    def update_ai(self, player_pos, world_x_offset=0):
-        """Simple AI State Machine with patrol and chase"""
+    def update_ai(self, player_pos, world_x_offset=0, platforms=None):
+        """Simple AI State Machine with patrol and chase and edge detection"""
         if not player_pos:
             return
 
@@ -166,7 +217,9 @@ class Enemy(pygame.sprite.Sprite):
                 self.direction = 1 if player_world_x > self.world_pos.x else -1
 
             if distance < 250:
-                self.change_state("run")
+                # ONLY switch to run if there is ground in the direction of the player
+                if self.has_ground_ahead(platforms):
+                    self.change_state("run")
         
         elif self.state == "run":
             if distance > 400:
@@ -180,7 +233,7 @@ class Enemy(pygame.sprite.Sprite):
                 self.change_state("attack")
                 self.velocity.x = 0
             else:
-                self.move_towards_player(player_world_x)
+                self.move_towards_player(player_world_x, platforms)
 
 
         
@@ -193,20 +246,90 @@ class Enemy(pygame.sprite.Sprite):
                 self.change_state("idle")
         
         elif self.state == "hit":
-            self.velocity.x = 0
+            # Only reset velocity if not currently being knocked back
+            if self.knockback_velocity.length() <= 0.1:
+                self.velocity.x = 0
+            
             if hasattr(self, 'stun_timer') and self.stun_timer <= 0:
                 self.change_state("idle")
 
-    def move_towards_player(self, player_world_x):
-        if player_world_x > self.world_pos.x:
-            self.velocity.x = 2
-            self.direction = 1
-        else:
-            self.velocity.x = -2
-            self.direction = -1
+    def move_towards_player(self, player_world_x, platforms=None):
+        target_vx = 2 if player_world_x > self.world_pos.x else -2
+        self.direction = 1 if target_vx > 0 else -1
         
+        # --- EDGE DETECTION ---
+        # Look ahead to see if there is still ground
+        if not self.has_ground_ahead(platforms):
+            self.velocity.x = 0
+            if self.state == "run":
+                self.change_state("idle")
+            return
+
+        self.velocity.x = target_vx
         if "run" in self.animations:
             self.change_state("run")
+
+    def has_ground_ahead(self, platforms):
+        """Helper to check for ground ahead in current direction"""
+        if not platforms: return True
+        
+        # Look ahead based on direction
+        # Increase distance for larger monsters like dark_knight
+        check_dist = 40 if self.enemy_type == 'dark_knight' else 25
+        check_x = self.world_pos.x + (check_dist * self.direction)
+        
+        for p in platforms:
+            # Check if check_x is within platform bounds and platform is at our ground level
+            if p.x <= check_x <= p.x + p.length and abs(p.y - self.world_pos.y) < 20:
+                return True
+        return False
+
+    def on_ground(self, platforms=None):
+        """Check if monster is on ground and return True/False. Also snaps ground_y."""
+        if not platforms:
+            # If no platforms to check, stay at current grounded state (don't fall)
+            # This prevents monsters from falling through the world when far from screen
+            return True 
+            
+        for p in platforms:
+            # Check if within horizontal bounds
+            if p.x - 5 <= self.world_pos.x <= p.x + p.length + 5:
+                # Check if slightly above or just passed the platform
+                # (allowing for falling velocity)
+                if 0 <= self.world_pos.y - p.y <= max(5, getattr(self, 'velocity', pygame.math.Vector2(0,0)).y + 1):
+                    self._ground_y = p.y
+                    return True
+                # Precision check for initialization
+                if abs(p.y - self.world_pos.y) < 2:
+                    self._ground_y = p.y
+                    return True
+        return False
+
+    def take_damage(self, amount, knockback_dir=0, vertical_knockback=0):
+        """Handle taking damage with invincibility and knockback"""
+        if self.invincible_timer > 0:
+            return False # Ignored damage
+        
+        self.hp -= amount
+        self.invincible_timer = 0.4 # 0.4 seconds of invincibility
+        
+        # Armor mechanism: reduces stun and knockback
+        has_armor = self.armor > 0
+        
+        if not has_armor or amount > self.armor:
+            self.stun_timer = 0.5       # 0.5 seconds of stun
+            self.change_state("hit")
+        
+        # Apply knockback (reduced by armor)
+        kb_strength = 8 * (0.5 if has_armor else 1.0)
+        v_kb_strength = vertical_knockback * (0.5 if has_armor else 1.0)
+        
+        if knockback_dir != 0 or vertical_knockback != 0:
+            self.knockback_velocity = pygame.math.Vector2(knockback_dir * kb_strength, -v_kb_strength)
+        
+        if self.hp <= 0:
+            self.change_state("death")
+        return True
 
     def deal_damage(self):
         """Check for damage at specific frame"""
@@ -379,7 +502,9 @@ def load_enemies():
         state_map = {
             "idle": ["idle.png", "Idle.png"],
             "run": ["walk.png", "run.png", "Walk.png", "Run.png"],
-            "attack": ["attack.png", "Attack.png"]
+            "attack": ["attack.png", "Attack.png"],
+            "hit": ["hit.png", "Hit.png", "hurt.png", "Hurt.png"],
+            "death": ["death.png", "Death.png", "die.png", "Die.png"]
         }
         
         # --- Detect walk segments first (most reliable source) ---
@@ -545,6 +670,12 @@ def load_enemies():
                 frames_by_state["run"] = frames_by_state.get("idle", all_frames_loaded)
             if "attack" not in frames_by_state:
                 frames_by_state["attack"] = frames_by_state.get("run", all_frames_loaded)
+            
+            # If no death animation found, we don't force one (it will kill() in change_state)
+            # but if there is hit animation we use it
+            if "hit" not in frames_by_state and "idle" in frames_by_state:
+                # Use a single frame from idle as hit fallback
+                frames_by_state["hit"] = [frames_by_state["idle"][0]]
 
             config = get_enemy_config(enemy_name)
             if config.get('ai_generated', False):
@@ -585,9 +716,6 @@ def load_enemies():
                     for st, frames in frames_by_state.items():
                         nframes = []
                         for f in frames:
-                            # Instead of individual tight crop, crop using the global bounding box
-                            # But wait, different files might have different dimensions! 
-                            # To be safe, we just place the tightly cropped part at its original relative position
                             _a = pygame.surfarray.array_alpha(f)
                             nz = np.where(_a > 10)
                             canvas = pygame.Surface((union_w, union_h), pygame.SRCALPHA)
@@ -608,11 +736,12 @@ def load_enemies():
                     max_w, max_h = union_w, union_h
                     
                     # Calculate auto_y_offset to keep feet on the ground
+                    # Use median to ignore outliers/noise at the bottom of AI spritesheets
                     if feet_y_run:
-                        feet_y = max(feet_y_run)
+                        feet_y = sorted(feet_y_run)[len(feet_y_run)//2]
                         auto_y_offset = global_max_y - feet_y
                     elif feet_y_idle:
-                        feet_y = max(feet_y_idle)
+                        feet_y = sorted(feet_y_idle)[len(feet_y_idle)//2]
                         auto_y_offset = global_max_y - feet_y
                     else:
                         auto_y_offset = 0
@@ -814,7 +943,7 @@ if not ENEMY_CONFIGS:
         'skeleton': {'animation_speed': 100, 'scale': 1.2},
         'dark_gargoyle': {'scale': 2.0, 'y_offset': 0},
         'spiked_barricade': {'scale': 1.8},
-        'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': 0},
+        'rooted_knight_boss': {'cols': 4, 'rows': 3, 'scale': 0.5, 'y_offset': 0, 'armor': 10, 'attack_range': 60},
         'rotten_bug':         {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': 0, 'animation_speed': 100},
         'flying_parasite':    {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': -120}, 
         'forest_ghoul':       {'cols': 4, 'rows': 2, 'scale': 0.45, 'y_offset': 0}

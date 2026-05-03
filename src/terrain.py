@@ -339,8 +339,8 @@ class ObstacleSprite(Enemy):
             # Đã scale trong load_enemies(), không scale lại ở đây nữa
             self.world_pos.x += 15
             
-            # Calculate HP based on distance (progression)
-            base_hp = 50
+            # Calculate HP based on config and distance (progression)
+            base_hp = sprite_config.get('base_hp', 50)
             extra_hp = (world_x // 1000) * 20  # +20 HP per 1000 units
             self.hp = base_hp + extra_hp
             self.max_hp = self.hp
@@ -374,9 +374,9 @@ class ObstacleSprite(Enemy):
             
         self.rect.midbottom = (self.world_pos.x, self.world_pos.y)
 
-    def update(self, world_x_offset, delta_time, player_pos=None):
+    def update(self, world_x_offset, delta_time, player_pos=None, platforms=None):
         if self.kind == 'real' and hasattr(self, 'enemy_type'):
-            super().update(world_x_offset, delta_time, player_pos)
+            super().update(world_x_offset, delta_time, player_pos, platforms=platforms)
         else:
             if "idle" in self.animations:
                 self.animations["idle"].update(delta_time)
