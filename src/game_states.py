@@ -6,7 +6,7 @@ from config import *
 from terrain import load_level, EndlessManager, TerrainGenerator, ObstacleSprite, collide_player_hitbox
 from dialogue_quest import DialogueSystem, QuestManager
 from player import Player
-from enemy_manager import LOADED_ENEMIES, get_random_enemy, Enemy
+from enemy_manager import LOADED_ENEMIES, get_random_enemy, Enemy, DeathEffect
 from decoy_manager import LOADED_DECOYS, get_random_decoy
 from background import ForestBackground, GothicBackground
 from shop_system import ShopSystem
@@ -98,6 +98,9 @@ class PlayingState(GameState):
         
         if self.game.player_stats.hp <= 0:
             self.game.player_stats.hp = self.game.player_stats.max_hp
+        
+        # Give player a bit of invincibility on spawn/respawn to prevent death loops
+        self.player.invincible_timer = 2000 # 2 seconds of safety
         
         self.world_x_offset = 0
         self.current_run_speed = RUN_SPEED
@@ -269,6 +272,9 @@ class PlayingState(GameState):
                             damage = 10 + getattr(self.game.player_stats, 'atk_bonus', 0)
                             obs.hp -= damage
                             if obs.hp <= 0:
+                                # Spawn death effect before killing the sprite
+                                effect = DeathEffect(obs.world_pos.x, obs.world_pos.y, color=(200, 50, 50))
+                                self.all_sprites.add(effect)
                                 obs.kill()
                                 self.game.player_stats.gold += 50
                             else:
@@ -375,10 +381,15 @@ class PlayingState(GameState):
                                 if was_hit:
                                     self.hit_stop_timer = 0.08 # Brief hitstop
                                     if obs.hp <= 0:
+                                        # Spawn death effect
+                                        effect = DeathEffect(obs.world_pos.x, obs.world_pos.y, color=(100, 100, 100))
+                                        self.all_sprites.add(effect)
                                         self.game.player_stats.gold += 50
                             else:
                                 obs.hp -= damage
                                 if obs.hp <= 0:
+                                    effect = DeathEffect(obs.world_pos.x, obs.world_pos.y)
+                                    self.all_sprites.add(effect)
                                     obs.kill()
                                     self.game.player_stats.gold += 50
                                 else:
@@ -390,26 +401,32 @@ class PlayingState(GameState):
                         obs.kill()
                 else:
                     if not is_invincible and not player_took_damage:
-                        player_took_damage = True
-                        # Player takes damage from enemy collision
-                        if hasattr(obs, 'hp') and obs.hp > 0:
-                            self.game.player_stats.hp -= 10  # Enemy damage (reduced from 15)
-                            self.player.invincible_timer = 800  # 0.8s invincible
-                        else:
-                            self.game.player_stats.hp -= 10  # Trap damage
-                            self.player.invincible_timer = 800
-
-                        if self.game.player_stats.hp <= 0:
-                            self.player.state = 'death'
-                            self.player.current_frame = 0
-                            self.player.vx = 0
-                            self.game.player_stats.hp = 0
-                            break
-                        else:
-                            # Optional knockback on taking damage
-                            self.player.vx = -5 if self.player.facing_right else 5
-                            self.player.vy = -3
-                            self.player.on_ground = False
+                        # Only take damage if the enemy is actually attacking or it's a trap
+                        should_damage = False
+                        damage_amount = 10
+                        
+                        if hasattr(obs, 'deal_damage'):
+                            if obs.deal_damage():
+                                should_damage = True
+                        elif not hasattr(obs, 'enemy_type'): # Trap or spike (no enemy_type attr)
+                            should_damage = True
+                            
+                        if should_damage:
+                            player_took_damage = True
+                            self.game.player_stats.hp -= damage_amount
+                            self.player.invincible_timer = 1000  # 1.0s invincible
+                            
+                            if self.game.player_stats.hp <= 0:
+                                self.player.state = 'death'
+                                self.player.current_frame = 0
+                                self.player.vx = 0
+                                self.game.player_stats.hp = 0
+                                break
+                            else:
+                                # Optional knockback on taking damage
+                                self.player.vx = -5 if self.player.facing_right else 5
+                                self.player.vy = -3
+                                self.player.on_ground = False
             return
 
 

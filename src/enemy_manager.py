@@ -43,6 +43,54 @@ class Animation:
         self.timer = 0
         self.done = False
 
+# --- EFFECTS ---
+class DeathEffect(pygame.sprite.Sprite):
+    def __init__(self, x, y, color=(200, 200, 200)):
+        super().__init__()
+        self._layer = 4 # Above enemies
+        self.world_pos = pygame.math.Vector2(x, y)
+        self.timer = 0.5 # 0.5 seconds
+        self.max_timer = 0.5
+        self.particles = []
+        for _ in range(12):
+            self.particles.append({
+                'pos': pygame.math.Vector2(0, 0),
+                'vel': pygame.math.Vector2(random.uniform(-3, 3), random.uniform(-3, 3)),
+                'size': random.randint(4, 10),
+                'color': (
+                    min(255, color[0] + random.randint(-30, 30)),
+                    min(255, color[1] + random.randint(-30, 30)),
+                    min(255, color[2] + random.randint(-30, 30))
+                )
+            })
+        self.image = pygame.Surface((150, 150), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+        self.base_color = color
+
+    def update(self, world_x_offset, dt, **kwargs):
+        self.timer -= dt
+        if self.timer <= 0:
+            self.kill()
+            return
+
+        self.image.fill((0, 0, 0, 0))
+        alpha_mult = self.timer / self.max_timer
+        
+        for p in self.particles:
+            p['pos'] += p['vel'] * dt * 60
+            size = max(1, int(p['size'] * alpha_mult))
+            alpha = int(255 * alpha_mult)
+            
+            # Draw particle
+            pygame.draw.circle(
+                self.image, 
+                (*p['color'], alpha), 
+                (75 + int(p['pos'].x), 75 + int(p['pos'].y)), 
+                size
+            )
+        
+        self.rect.center = (int(self.world_pos.x - world_x_offset), int(self.world_pos.y))
+
 # --- ENEMY BASE CLASS ---
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, enemy_type, frames_data, y_offset=None):
@@ -110,7 +158,11 @@ class Enemy(pygame.sprite.Sprite):
             elif new_state == "hit":
                 self.state = "hit"
             elif new_state == "death":
-                # If no death animation, just kill immediately
+                # If no death animation, just kill immediately with effect
+                if hasattr(self, 'groups') and self.groups():
+                    group = self.groups()[0]
+                    effect = DeathEffect(self.world_pos.x, self.world_pos.y)
+                    group.add(effect)
                 self.kill()
 
     def update(self, world_x_offset, dt, player_pos=None, platforms=None):
@@ -191,6 +243,10 @@ class Enemy(pygame.sprite.Sprite):
         if self.state == "death":
             self.velocity.x = 0
             if "death" in self.animations and self.animations["death"].done:
+                if hasattr(self, 'groups') and self.groups():
+                    group = self.groups()[0]
+                    effect = DeathEffect(self.world_pos.x, self.world_pos.y)
+                    group.add(effect)
                 self.kill()
         
         self.world_pos += self.velocity * dt * 60
@@ -332,10 +388,15 @@ class Enemy(pygame.sprite.Sprite):
         return True
 
     def deal_damage(self):
-        """Check for damage at specific frame"""
+        """Check for damage at specific frames (usually mid-animation)"""
         if self.state == "attack":
-            if "attack" in self.animations and self.animations["attack"].index == 3:
-                return True
+            if "attack" in self.animations:
+                idx = self.animations["attack"].index
+                num_frames = len(self.animations["attack"].frames)
+                # Damage usually happens in the middle frames (e.g. 2, 3, 4 out of 6)
+                damage_start = max(1, num_frames // 3)
+                damage_end = min(num_frames - 1, num_frames * 2 // 3 + 1)
+                return damage_start <= idx <= damage_end
         return False
 
 # --- GLOBAL ENEMIES ---

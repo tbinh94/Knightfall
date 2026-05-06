@@ -8,12 +8,13 @@ class ParallaxLayer:
         self.original_image = pygame.image.load(image_path).convert_alpha()
         img_w, img_h = self.original_image.get_size()
         # Scale image height to be taller than screen to allow shifting up without leaving gaps at the bottom
-        scale_factor = (screen_h + 250) / img_h
+        # Increased scale factor and shift to cover the top area
+        scale_factor = (screen_h + 400) / img_h
         new_w = int(img_w * scale_factor)
-        self.image = pygame.transform.scale(self.original_image, (new_w, screen_h + 250))
+        self.image = pygame.transform.scale(self.original_image, (new_w, screen_h + 400))
         self.width = self.image.get_width()
         self.speed = speed
-        self.y_offset = -180  # Shift up higher to cover upper areas as requested
+        self.y_offset = -280  # Shift up higher to cover upper areas (Quest/HUD area)
 
 
     def draw(self, screen, x_offset):
@@ -51,16 +52,7 @@ class ForestBackground:
             if os.path.exists(path):
                 self.layers.append(ParallaxLayer(path, speed, SCREEN_H))
         
-        # Load column asset as a prop
-        self.column_img = None
-        col_path = os.path.join(bg_dir, "column.png")
-        if os.path.exists(col_path):
-            self.column_img = pygame.image.load(col_path).convert_alpha()
-            # Scale to a reasonable size
-            cw, ch = self.column_img.get_size()
-            target_h = int(SCREEN_H * 0.7)
-            target_w = int(cw * (target_h / ch))
-            self.column_img = pygame.transform.scale(self.column_img, (target_w, target_h))
+        # Column asset loading removed as per request
 
     def draw(self, screen, world_x_offset, level_length=None):
         if not self.layers:
@@ -72,17 +64,7 @@ class ForestBackground:
             if i < 10: # Draw up to Layer_0002_7 (Near trees 2)
                 layer.draw(screen, world_x_offset)
         
-        # Draw columns between near layers for depth
-        if self.column_img:
-            col_spacing = 800
-            start_idx = int(world_x_offset // col_spacing)
-            num_cols = (SCREEN_W // col_spacing) + 2
-            for i in range(num_cols):
-                idx = start_idx + i
-                # Parallax speed for columns (same as near trees 1)
-                col_x = (idx * col_spacing) - (world_x_offset * 0.6)
-                if -200 < col_x < SCREEN_W + 200:
-                    screen.blit(self.column_img, (col_x, SCREEN_H - self.column_img.get_height() - 50))
+        # Columns drawing removed
 
         # Draw remaining foreground layers
         for i, layer in enumerate(self.layers):
@@ -94,7 +76,6 @@ class GothicBackground:
         try:
             self.tileset = pygame.image.load("assets/backgrounds/tileset.png").convert_alpha()
             self.tile_size = self.tileset.get_width() // 4
-            self.column = pygame.image.load("assets/backgrounds/column.png").convert_alpha()
             self.tiles = []
             for r in range(4):
                 row_tiles = []
@@ -140,10 +121,4 @@ class GothicBackground:
             tx = offset_x + i * self.tile_size
             tile_idx = (start_tile_x + i) % 4
             screen.blit(self.tiles[1][tile_idx], (tx, 20))
-        col_spacing = 300
-        start_col = int(world_x_offset // col_spacing)
-        num_cols = (SCREEN_W // col_spacing) + 2
-        col_offset_x = -(world_x_offset % col_spacing)
-        for i in range(num_cols):
-            cx = col_offset_x + i * col_spacing
-            screen.blit(self.column, (cx, 0))
+        # Columns drawing removed
