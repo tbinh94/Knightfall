@@ -1,8 +1,12 @@
 import pygame
+from pathlib import Path
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+# Add the 'src' directory to sys.path to allow importing modules from it
+src_path = str(Path(__file__).resolve().parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 from config import SCREEN_W, SCREEN_H, FPS
 from main import Game

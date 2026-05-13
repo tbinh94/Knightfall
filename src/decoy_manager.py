@@ -74,7 +74,7 @@ def load_decoys():
         filepath = os.path.join(decoys_dir, filename)
         decoy_name = os.path.splitext(filename)[0]
         try:
-            num_frames, frame_width, frame_height, sheet_type = _detect_sprite_frames(filepath)
+            num_frames, frame_width, frame_height, sheet_type, extra_data = detect_sprite_frames(filepath)
             spritesheet = pygame.image.load(filepath).convert_alpha()
             cropped_frames = []
             for i in range(num_frames):
@@ -112,7 +112,9 @@ DECOY_CONFIGS = {
     'wall': {'scale': 0.4, 'use_static_frame': True, 'y_offset': 28},
     'warrior': {'scale': 2.4, 'use_static_frame': True},
     'column': {'scale': 1.0, 'use_static_frame': True, 'y_offset': 0},
-    'lore_popup': {'scale': 1.0, 'use_static_frame': True, 'y_offset': 0}
+    'decor_bush': {'scale': 0.08, 'use_static_frame': True, 'y_offset': 0},
+    'decor_grass': {'scale': 0.06, 'use_static_frame': True, 'y_offset': 0},
+    'decor_rock': {'scale': 0.05, 'use_static_frame': True, 'y_offset': 0}
 }
 
 def get_decoy_config(decoy_name):

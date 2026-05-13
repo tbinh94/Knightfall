@@ -42,11 +42,11 @@ GROUND_Y = SCREEN_H - GROUND_MARGIN_FROM_BOTTOM
 # ============================================
 PLAYER_W = int(33 * SCALE_UNIFORM)
 PLAYER_H = int(54 * SCALE_UNIFORM)
-JUMP_V = -20 * SCALE_UNIFORM
-DOUBLE_JUMP_V = -20 * SCALE_UNIFORM
-GRAVITY = 1.0 * SCALE_UNIFORM
-RUN_SPEED = 5.5 * SCALE_UNIFORM
-WALK_SPEED = 8.0 * SCALE_UNIFORM  # Manual movement speed
+JUMP_V = -16 * SCALE_UNIFORM
+DOUBLE_JUMP_V = -16 * SCALE_UNIFORM
+GRAVITY = 0.8 * SCALE_UNIFORM
+RUN_SPEED = 4.0 * SCALE_UNIFORM
+WALK_SPEED = 5.5 * SCALE_UNIFORM  # Manual movement speed
 
 
 
@@ -55,7 +55,7 @@ WALK_SPEED = 8.0 * SCALE_UNIFORM  # Manual movement speed
 # ============================================
 SPEED_INCREASE_RATE = 0.2 * SCALE_UNIFORM
 MAX_RUN_SPEED = 15 * SCALE_UNIFORM
-SAFE_ZONE_DISTANCE = int(1200 * SCALE_X)
+SAFE_ZONE_DISTANCE = int(400 * SCALE_X)
 
 # ============================================
 # WALL JUMP PHYSICS (Scaled)

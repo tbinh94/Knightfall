@@ -15,12 +15,6 @@
       "platform_y": 600,
       "obstacles": [
         {
-          "x": 100,
-          "kind": "decor",
-          "type": "lore_popup",
-          "text": "Move: A/D | Jump: Space | Attack: J"
-        },
-        {
           "x": 400,
           "kind": "real"
         },

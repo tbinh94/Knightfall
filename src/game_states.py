@@ -163,6 +163,7 @@ class PlayingState(GameState):
 
     def _create_fixed_level(self):
         for seg in self.world_data:
+            self._decorate_segment(seg)
             for ob_data in seg.get("obstacles", []): 
                 self._create_obstacle_sprite(ob_data)
 
@@ -173,10 +174,27 @@ class PlayingState(GameState):
         terrain_type = pattern.get("type", "straight")
         terrain_func = getattr(TerrainGenerator, terrain_type, TerrainGenerator.straight)
         segment = terrain_func(self.cursor_x, pattern)
+        self._decorate_segment(segment)
         for ob_data in segment.get("obstacles", []): 
             self._create_obstacle_sprite(ob_data)
         self.active_segments.append(segment)
         self.cursor_x += segment["length"]
+
+    def _decorate_segment(self, segment):
+        """Automatically add random background decorations to platforms"""
+        from terrain import Obstacle
+        platforms = segment.get("platforms", [segment.get("platform")])
+        for p in platforms:
+            if not p or p.length < 100: continue
+            
+            # Reduce density: ~1 decor per 400 units
+            num_decors = int(p.length // 400) + (1 if random.random() < 0.3 else 0)
+            for _ in range(num_decors):
+                dx = random.randint(30, int(p.length) - 30)
+                # Use individual decor assets instead of a sprite sheet
+                decor_type = random.choice(["decor_bush", "decor_grass", "decor_rock", "pillar"])
+                ob_obj = Obstacle(p.x + dx, p.y, kind="decor", sprite_type=decor_type)
+                self._create_obstacle_sprite(ob_obj)
         
     def _create_obstacle_sprite(self, ob_data):
         # Determine kind (real, fake, or decor)

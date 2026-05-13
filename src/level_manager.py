@@ -252,6 +252,7 @@ class LevelManager:
         self.font_card_name = _load_font("Georgia", int(28 * SCALE_UNIFORM))
         self.font_meta   = _load_font("Arial", int(14 * SCALE_UNIFORM))
         self.font_hint   = _load_font("Arial", int(16 * SCALE_UNIFORM))
+        self.font_copy   = _load_font("Arial", int(16 * SCALE_UNIFORM))
 
         self.progress_file = "progress.json"
         self.completed_levels = self.load_progress()
@@ -351,137 +352,7 @@ class LevelManager:
             "Expert": (255, 80, 120),
         }.get(diff, (160, 160, 160))
 
-    def draw(self):
-        _draw_bg(self.screen, self.t)
-
-        # Particles
-        self.particles = [p for p in self.particles if p.update()]
-        while len(self.particles) < 60:
-            self.particles.append(Particle(self.w, self.h))
-        for p in self.particles:
-            p.draw(self.screen)
-
-        cx = self.w // 2
-
-        # ── Title ──
-        _draw_text_glow(self.screen, self.font_title, "SELECT LEVEL",
-                        cx, int(self.h * 0.06),
-                        (255, 248, 240), (160, 90, 255))
-
-        # Divider under title
-        title_h = self.font_title.size("SELECT LEVEL")[1]
-        div_y = int(self.h * 0.06) + title_h + 10
-        for dx in range(-200, 201, 3):
-            alpha = int(140 * (1 - abs(dx) / 200))
-            s = pygame.Surface((3, 2), pygame.SRCALPHA)
-            s.fill((180, 120, 255, alpha))
-            self.screen.blit(s, (cx + dx, div_y))
-
-        # ── Cards ──
-        top_y = div_y + 22
-        cw, ch = self._card_w, self._card_h
-        gap = self._card_gap
-
-        if len(self.menu_items) > self.visible_items:
-            self.scroll_offset = max(0, self.selected_index - self.visible_items + 1) \
-                if self.selected_index >= self.visible_items else 0
-
-        for i, item in enumerate(self.menu_items):
-            if i < self.scroll_offset or i >= self.scroll_offset + self.visible_items:
-                continue
-            di = i - self.scroll_offset
-            card_y = top_y + di * (ch + gap)
-
-            is_sel = (i == self.selected_index)
-            is_unlocked = self._is_unlocked(i)
-
-            # Hover animation
-            target = 1.0 if is_sel else 0.0
-            self.hover_progress[i] += (target - self.hover_progress[i]) * 0.18
-            hv = self.hover_progress[i]
-
-            lift = int(-7 * hv)
-            card_rect = pygame.Rect(cx - cw//2, card_y + lift, cw, ch)
-
-            self._draw_card(card_rect, item, i, is_sel, is_unlocked, hv)
-
-        # ── Bottom hint ──
-        hint = "↑↓ Navigate   ENTER Select   ESC Back"
-        hint_surf = self.font_copy.render(hint, True, (110, 95, 140))
-        self.screen.blit(hint_surf, hint_surf.get_rect(center=(cx, self.h - 24)))
-
-        pygame.display.flip()
-
-    def _draw_card(self, rect, item, index, is_sel, is_unlocked, hv):
-        x, y, w, h = rect
-
-        # Card background surface
-        card_surf = pygame.Surface((w, h), pygame.SRCALPHA)
-
-        if not is_unlocked:
-            bg1, bg2 = (40, 35, 55), (35, 30, 48)
-        elif is_sel:
-            bg1 = (70, 45, 130)
-            bg2 = (95, 60, 170)
-        else:
-            bg1 = (38, 28, 62)
-            bg2 = (50, 38, 80)
-
-        # Gradient fill
-        for row in range(h):
-            ratio = row / h
-            r = int(bg1[0] * (1-ratio) + bg2[0] * ratio)
-            g = int(bg1[1] * (1-ratio) + bg2[1] * ratio)
-            b = int(bg1[2] * (1-ratio) + bg2[2] * ratio)
-            pygame.draw.line(card_surf, (r, g, b), (0, row), (w, row))
-
-        # Glow border
-        border_col = (200, 140, 255) if is_sel else (90, 70, 130)
-        border_w = 2 + int(hv)
-        pygame.draw.rect(card_surf, border_col, (0, 0, w, h), border_w, border_radius=8)
-
-        # Inner shimmer on selected
-        if hv > 0.1:
-            shimmer = pygame.Surface((w, h), pygame.SRCALPHA)
-            pygame.draw.rect(shimmer, (180, 120, 255, int(20 * hv)), (0, 0, w, h), border_radius=8)
-            card_surf.blit(shimmer, (0, 0))
-
-        self.screen.blit(card_surf, (x, y))
-
-        # ── Text content ──
-        pad = 22
-        text_col = (255, 255, 255) if is_unlocked else (100, 90, 120)
-
-        name_surf = self.font_item.render(item["display_name"], True, text_col)
-        self.screen.blit(name_surf, (x + pad, y + 12))
-
-        if item.get("difficulty"):
-            diff_col = self._diff_color(item["difficulty"]) if is_unlocked else (80, 75, 100)
-            stars = {"Easy": "★", "Normal": "★★", "Hard": "★★★", "Expert": "★★★★"}.get(item["difficulty"], "")
-            diff_surf = self.font_meta.render(f"{stars}  {item['difficulty']}", True, diff_col)
-            self.screen.blit(diff_surf, (x + pad, y + h - diff_surf.get_height() - 10))
-
-        # Completed badge
-        if not item.get("is_editor") and not item.get("is_special_mode") \
-                and item["filename"] in self.completed_levels:
-            badge = self.font_status.render("✓ DONE", True, (80, 240, 120))
-            self.screen.blit(badge, badge.get_rect(midright=(x + w - pad, y + h//2)))
-
-        # Lock
-        if not is_unlocked:
-            lock = self.font_item.render("🔒 LOCKED", True, (180, 120, 80))
-            self.screen.blit(lock, lock.get_rect(center=(x + w//2, y + h//2)))
-
-        # Selection arrow
-        if is_sel:
-            ax = x - 20
-            ay = y + h // 2
-            pulse = int(4 * math.sin(self.t * 4))
-            pygame.draw.polygon(self.screen, (220, 160, 255), [
-                (ax + pulse, ay),
-                (ax - 10 + pulse, ay - 7),
-                (ax - 10 + pulse, ay + 7)
-            ])
+    # Removed duplicate draw and _draw_card methods
 
     # ── Input ─────────────────────────────────
     def handle_input(self):
